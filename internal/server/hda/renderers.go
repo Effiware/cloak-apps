@@ -3,9 +3,9 @@ package hda
 import (
 	"net/http"
 
-	"github.com/effiware/goth-template/internal/server/models"
-	views "github.com/effiware/goth-template/internal/views"
-	components "github.com/effiware/goth-template/internal/views/components"
+	"github.com/effiware/cloak-apps/internal/server/models"
+	views "github.com/effiware/cloak-apps/internal/views"
+	components "github.com/effiware/cloak-apps/internal/views/components"
 )
 
 var clicks *models.Clicks = models.ClicksStore

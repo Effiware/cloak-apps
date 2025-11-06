@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	_ "github.com/effiware/goth-template/internal/docs"
+	_ "github.com/effiware/cloak-apps/internal/docs"
 )
 
 type HdaAndApi struct{}

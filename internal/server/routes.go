@@ -3,10 +3,10 @@ package server
 import (
 	"net/http"
 
-	"github.com/effiware/goth-template/internal"
-	_ "github.com/effiware/goth-template/internal/docs"
-	"github.com/effiware/goth-template/internal/server/api"
-	"github.com/effiware/goth-template/internal/server/hda"
+	"github.com/effiware/cloak-apps/internal"
+	_ "github.com/effiware/cloak-apps/internal/docs"
+	"github.com/effiware/cloak-apps/internal/server/api"
+	"github.com/effiware/cloak-apps/internal/server/hda"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
