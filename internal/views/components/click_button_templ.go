@@ -8,7 +8,7 @@ package components
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/effiware/goth-template/internal/server/models"
+import "github.com/effiware/cloak-apps/internal/server/models"
 
 var clicks *models.Clicks = models.ClicksStore
 

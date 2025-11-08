@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/effiware/goth-template/internal/server"
+	"github.com/effiware/cloak-apps/internal/server"
 
 	_ "github.com/joho/godotenv/autoload"
 )

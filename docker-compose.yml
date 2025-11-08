@@ -1,7 +1,7 @@
 services:
-  goth-template:
-    container_name: goth-template
-    image: effiware/goth-template:0.0.1
+  cloak-apps:
+    container_name: cloak-apps
+    image: effiware/cloak-apps:0.0.1
     build:
       context: .
       dockerfile: Dockerfile

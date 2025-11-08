@@ -1,4 +1,4 @@
-# 🚀 GOTH Stack Complete Setup
+# Cloak Apps
 
 [![Go Version](https://img.shields.io/badge/Go-1.25.0-00ADD8?style=flat-square&logo=go)](https://go.dev/doc/go1.25)
 [![Templ](https://img.shields.io/badge/Templ-0.3.943-red?style=flat-square)](https://templ.guide)
@@ -6,41 +6,35 @@
 [![HTMX](https://img.shields.io/badge/HTMX-2.0.7-purple?style=flat-square)](https://htmx.org)
 [![Alpine.js](https://img.shields.io/badge/Alpine.js-3.15.0-2D3441?style=flat-square)](https://alpinejs.dev)
 
-A modern, fully configured starter template for building fast, type-safe web applications using Go, HTMX, Tailwind CSS, Alpine.js, and Templ. This stack provides an incredible developer experience with type safety from your database all the way to your HTML.
+An internal application portal for organization engineers, similar to Okta's app integration dashboard but natively supporting Keycloak SSO. Built as a Hypermedia-Driven Application (HDA) using the GOTH stack.
 
-## ✨ Features
+## Overview
 
-- **📜 Type-Safe Templates**: Using [Templ](https://templ.guide) for compile-time checked templates
-- **🔥 Hot Reload**: Using [Air](https://github.com/cosmtrek/air) for instant feedback during development
-- **🎨 HTMX + Tailwind**: [Modern, interactive UIs](https://htmx.org) without complex client-side JavaScript
-- **🛠️ Modern JS Utilities**: [Alpine.js](https://alpinejs.dev) for lightweight interactivity
-- **📱 Responsive Design**: [Mobile-first approach](https://tailwindcss.com) with Tailwind CSS
+Cloak Apps serves as a centralized hub where users can access all applications they have permission to use. Keycloak acts as the single source of truth for authentication and role-based access control (RBAC).
 
-## 🚀 Quick Start
+**Key Features:**
+- [x] Keycloak SSO integration for authentication
+- [x] Application grouping by space (operations, tools, mvp, etc.)
+- [x] Environment filtering (production, development, all)
+- [x] Dark/light mode support
+- [x] Card and list view modes
+- [x] Type-safe templates with Templ
+- [x] Hypermedia-driven architecture with HTMX
+
+Built from the [Effiware GOTH template](https://github.com/Effiware/goth-template).
+
+## Quick Start
 
 ### Prerequisites
 
-At least the following major versions are required (when installing on your local machine):
-
-- Go v1.25
-- npm v11.4
-- node v24.4
-- Air v1.63.0
+- Go v1.25+
+- npm v11.4+
+- node v24.4+
+- Air v1.63.0 (for hot reload)
 - Templ CLI 0.3.943
-- GNU Make 3.81 (recommended, but optional)
+- GNU Make 3.81 (optional)
 
-Or just use Docker for everything:
-
-- Docker 28.1 (recommended, but optional)
-
-### Usage
-
-1. Start the server using either local setup or Docker (see below).
-2. Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
-3. Play with HDA (interactions, dynamic content loading, etc.) and see changes instantly with hot reload!
-4. Play with API 
-   - get clicks count: `curl http://localhost:8080/api/v1/clicks`
-   - increment clicks count: `curl -X POST http://localhost:8080/api/v1/clicks/increment`
+Or use Docker 28.1+
 
 ---
 
@@ -86,43 +80,13 @@ Either do `make prep` (will also install Go/Node dependencies on the host machin
 
 ## Access the Application
 
-In both cases, open your browser and navigate to:
+Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
 
-```bash
-http://localhost:<local-port>
-```
-
-Note: The `<app-port>` should match the `APP_PORT` in your `.env` file.
+The port should match the `APP_PORT` in your `.env` file.
 
 ---
 
-## Notes
+## Documentation
 
-### Port taken
-If you get an error that a port is already taken, you can change the port in the `.env` file or kill the process using it:
-
-```bash
-sudo lsof -i -P | grep LISTEN | grep :<PORT>
-```
-Then kill the process using the PID:
-```bash
-sudo kill -9 <PID>
-```
-
-### Remove package
-To remove a package, use the following command:
-```bash
-go mod edit -dropreplace <package>
-go mod tidy
-```
-
-If you used go install package@latest then to remove:
-
-```bash
-go install package@none
-go clean -cache -modcache
-```
-
-### Hot-reloading explanation
-
-There is an in detail explanation of how the hot reloading works in [this](https://medium.com/ostinato-rigore/go-htmx-templ-tailwind-complete-project-setup-hot-reloading-2ca1ba6c28be) article.
+- [CLAUDE.md](CLAUDE.md) - Project architecture and design decisions
+- [TODO.md](TODO.md) - Future implementation phases and roadmap

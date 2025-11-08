@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/effiware/goth-template/internal/server/http_errors"
+	"github.com/effiware/cloak-apps/internal/server/http_errors"
 )
 
 type ViewHandlerT func(w http.ResponseWriter, request *http.Request) error

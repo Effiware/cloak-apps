@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	_ "github.com/effiware/goth-template/internal/docs"
-	"github.com/effiware/goth-template/internal/server/models"
+	_ "github.com/effiware/cloak-apps/internal/docs"
+	"github.com/effiware/cloak-apps/internal/server/models"
 )
 
 type EndpointHandlerT func(w http.ResponseWriter, request *http.Request) (int, any, error)
