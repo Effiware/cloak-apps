@@ -17,14 +17,12 @@ Cloak Apps is an internal web application portal for organization engineers, sim
 
 The application uses the GOTH stack:
 
-- **G**o + Chi - Backend server and routing
-- **T**empl - Type-safe templating for Go
-- **H**TML - Semantic markup
-- **T**ailwind - Utility-first CSS framework
+- **GO** + Chi - Backend server and routing
+- **T**empl / **T**ailwind - Type-safe templating for GO with utility-first CSS framework
+- **H**TMX - For hypermedia-driven interactivity
 
 ### Additional Technologies
 
-- **HTMX** - For hypermedia-driven interactivity
 - **Keycloak** - Identity and access management (SSO + RBAC)
 
 ## Architecture: Hypermedia-Driven Application (HDA)
