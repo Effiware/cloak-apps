@@ -1,0 +1,8 @@
+server:
+  host: localhost
+  timeout: 10
+
+keycloak:
+  url: https://auth.example.com
+  realm: test-realm
+  client_id: test-client

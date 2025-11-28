@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Config struct holds file structure of a configuration file
 type Config struct {
 	Keycloak struct {
 		Url      string `mapstructure:"url"`
@@ -21,6 +22,7 @@ type Config struct {
 	} `mapstructure:"server"`
 }
 
+// LoadConfig reads and validates configuration
 func LoadConfig() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -43,6 +45,7 @@ func LoadConfig() (*Config, error) {
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, err
 	}
+
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -50,6 +53,7 @@ func LoadConfig() (*Config, error) {
 	return &config, nil
 }
 
+// Validate is used to check configuration values
 func (c *Config) Validate() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return fmt.Errorf("server.port must be between 1 and 65535, got %d", c.Server.Port)

@@ -1,7 +1,7 @@
 -include .env
 
 ### Execute on local machine
-.PHONY: prep build-local build swag templ notify-templ-proxy air
+.PHONY: prep build-local build test swag templ notify-templ-proxy air
 
 prep:
 	@go get -tool github.com/a-h/templ/cmd/templ@latest
@@ -17,6 +17,9 @@ build-local:
 build:
 	@npm run build
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./bin/main cmd/server/main.go
+
+test:
+	@go test ./... -cover
 
 swag:
 	@go tool swag init -g ./internal/embed.go -o ./internal/docs

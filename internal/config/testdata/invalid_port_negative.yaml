@@ -1,0 +1,7 @@
+server:
+  port: -1
+  host: localhost
+
+keycloak:
+  url: https://auth.example.com
+  realm: test-realm
