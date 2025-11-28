@@ -1,3 +1,13 @@
+networks:
+  cloak-apps-net:
+    external: false
+    name: cloak-apps-net
+
+volumes:
+  keycloak-db:
+    labels:
+      - "dev.cloakapps.description=Keycloak own database storage"
+
 services:
   cloak-apps:
     container_name: cloak-apps
@@ -8,11 +18,54 @@ services:
       args:
         BUILD_HASH: "abcd123"
     platform: linux/amd64
-    ports:
-      - "8080:8080"
-      - "8081:8081"
-    env_file:
-      - .env
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    depends_on:
+      - keycloak
+    networks:
+      - cloak-apps-net
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+      - "${TEMPL_PROXY_PORT}:${TEMPL_PROXY_PORT}"
+    environment:
+      - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}  # Overwritten by env var
+    volumes:
+      - ./config.yaml:/root/config.yaml:ro
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: cloak-apps-keycloak
+    depends_on:
+      - keycloak-db
+    networks:
+      - cloak-apps-net
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_PASSWORD: STRONG_DB_PASSWORD2
+      KC_DB_USERNAME: keycloak
+      KC_DB_SCHEMA: public
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: password
+      # --hostname=http://auth.cloakapps.localhost
+    command: |
+      start-dev
+      --http-enabled=true
+      --hostname-strict=false
+      -Dkeycloak.profile.feature.token_exchange=enabled
+      -Dkeycloak.profile.feature.admin_fine_grained_authz=enabled
+
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: cloak-apps-keycloak-db
+    networks:
+      - cloak-apps-net
+    volumes:
+      - keycloak-db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: STRONG_DB_PASSWORD2

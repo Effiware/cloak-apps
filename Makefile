@@ -9,6 +9,7 @@ prep:
 	@go get -tool github.com/swaggo/swag/cmd/swag@latest
 	@npm install
 	@cp .env.example .env
+	@cp config.example.yaml config.yaml
 
 build-local:
 	@go build -o ./bin/main cmd/server/main.go
@@ -21,7 +22,7 @@ swag:
 	@go tool swag init -g ./internal/embed.go -o ./internal/docs
 
 templ:
-	@go tool templ generate --watch --proxy=http://localhost:$(APP_PORT) --proxyport=$(TEMPL_PROXY_PORT) --open-browser=false --proxybind="0.0.0.0"
+	@go tool templ generate --watch --proxy=http://localhost:$(SERVER_PORT) --proxyport=$(TEMPL_PROXY_PORT) --open-browser=false --proxybind="0.0.0.0"
 
 notify-templ-proxy:
 	@go tool templ generate --notify-proxy --proxyport=$(TEMPL_PROXY_PORT)

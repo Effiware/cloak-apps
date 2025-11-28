@@ -1,0 +1,9 @@
+keycloak:
+  url: "http://localhost:8082"
+  realm: "cloak-apps"
+  client_id: "cloak-apps-client"
+
+server:
+  port: 8080
+#  host: "localhost"
+#  timeout: 10

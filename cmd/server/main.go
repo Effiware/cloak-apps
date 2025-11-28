@@ -2,21 +2,18 @@ package main
 
 import (
 	"log"
-	"os"
-	"strconv"
 
+	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/server"
-
-	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
-	port, err := strconv.Atoi(os.Getenv("APP_PORT"))
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatal("APP_PORT env variable not set correctly")
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	httpServer := server.HttpServer(port)
+	httpServer := server.HttpServer(cfg.Server.Host, cfg.Server.Port, cfg.Server.Timeout)
 	log.Printf("Running server on %s", httpServer.Addr)
 	if err := httpServer.ListenAndServe(); err != nil {
 		log.Fatal(err)
