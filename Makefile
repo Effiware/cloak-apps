@@ -31,17 +31,23 @@ notify-templ-proxy:
 	@go tool templ generate --notify-proxy --proxyport=$(TEMPL_PROXY_PORT)
 
 air:
-	@make templ & sleep 1
-	@go tool air
+	@trap 'make docker-down; exit' INT TERM; \
+	make templ & sleep 1; \
+	make docker-up-keycloak; \
+	go tool air; \
+	make docker-down
 
 ### Execute using docker-compose
-.PHONY: docker-build docker-up docker-down
+.PHONY: docker-build docker-up docker-up-keycloak docker-down
 
 docker-build:
-	@docker-compose -f docker-compose.yml build --no-cache
+	@docker-compose -f docker-compose.yml --profile whole build --no-cache
 
 docker-up:
-	@docker-compose -f docker-compose.yml up --no-recreate
+	@docker-compose -f docker-compose.yml --profile whole up --no-recreate
+
+docker-up-keycloak:
+	@docker-compose -f docker-compose.yml up --remove-orphans --detach
 
 docker-down:
-	@docker-compose -f docker-compose.yml down
+	@docker-compose -f docker-compose.yml --profile whole down

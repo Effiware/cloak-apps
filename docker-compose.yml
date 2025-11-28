@@ -19,6 +19,8 @@ services:
         BUILD_HASH: "abcd123"
     platform: linux/amd64
     restart: unless-stopped
+    profiles:
+      - whole
     depends_on:
       - keycloak
     networks:
