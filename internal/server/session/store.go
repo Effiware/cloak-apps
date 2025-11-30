@@ -1,0 +1,140 @@
+package session
+
+import (
+	"encoding/gob"
+	"log"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/gorilla/sessions"
+	"golang.org/x/oauth2"
+)
+
+const SessionName = "cloak-apps-session"
+
+const (
+	keyAccessToken  = "access_token"
+	keyTokenType    = "token_type"
+	keyRefreshToken = "refresh_token"
+	keyExpiry       = "expiry"
+	keyIDToken      = "id_token"
+)
+
+func init() {
+	// Register oauth2.Token for session encoding
+	gob.Register(&oauth2.Token{})
+	gob.Register(time.Time{})
+}
+
+type Store struct {
+	store  sessions.Store
+	maxAge int
+}
+
+func NewStore(secret string, maxAge int) *Store {
+	// Use FilesystemStore instead of CookieStore to avoid size limits
+	// Sessions are stored server-side in /tmp/sessions directory
+	sessionDir := "/tmp/sessions"
+
+	// Create session directory if it doesn't exist
+	if err := os.MkdirAll(sessionDir, 0700); err != nil {
+		log.Fatalf("Failed to create session directory: %v", err)
+	}
+
+	store := sessions.NewFilesystemStore(sessionDir, []byte(secret))
+	// Increase MaxLength to allow larger session data in cookies
+	// Even with FilesystemStore, the session ID and metadata are stored in cookies
+	store.MaxLength(8192)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	return &Store{
+		store:  store,
+		maxAge: maxAge,
+	}
+}
+
+func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.Token) error {
+	session, err := s.store.Get(r, SessionName)
+	if err != nil {
+		return err
+	}
+
+	// Store token components
+	session.Values[keyAccessToken] = token.AccessToken
+	session.Values[keyTokenType] = token.TokenType
+	session.Values[keyRefreshToken] = token.RefreshToken
+	session.Values[keyExpiry] = token.Expiry
+
+	// Store ID token if present
+	if idToken, ok := token.Extra("id_token").(string); ok {
+		session.Values[keyIDToken] = idToken
+	}
+
+	return session.Save(r, w)
+}
+
+func (s *Store) GetToken(r *http.Request) (*oauth2.Token, error) {
+	session, err := s.store.Get(r, SessionName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if token exists
+	accessToken, ok := session.Values[keyAccessToken].(string)
+	if !ok || accessToken == "" {
+		return nil, nil
+	}
+
+	// Reconstruct token
+	token := &oauth2.Token{
+		AccessToken:  accessToken,
+		TokenType:    getStringValue(session.Values, keyTokenType),
+		RefreshToken: getStringValue(session.Values, keyRefreshToken),
+	}
+
+	// Get expiry
+	if expiry, ok := session.Values[keyExpiry].(time.Time); ok {
+		token.Expiry = expiry
+	}
+
+	// Add ID token as extra
+	if idToken, ok := session.Values[keyIDToken].(string); ok && idToken != "" {
+		token = token.WithExtra(map[string]interface{}{
+			"id_token": idToken,
+		})
+	}
+
+	return token, nil
+}
+
+func (s *Store) Get(r *http.Request, name string) (*sessions.Session, error) {
+	return s.store.Get(r, name)
+}
+
+func (s *Store) Clear(w http.ResponseWriter, r *http.Request) error {
+	session, err := s.store.Get(r, SessionName)
+	if err != nil {
+		// Even if we can't get the session, try to clear it
+		session, _ = s.store.New(r, SessionName)
+	}
+
+	// Clear all values
+	session.Values = make(map[interface{}]interface{})
+	session.Options.MaxAge = -1 // Delete cookie
+
+	return session.Save(r, w)
+}
+
+func getStringValue(values map[interface{}]interface{}, key string) string {
+	if val, ok := values[key].(string); ok {
+		return val
+	}
+	return ""
+}

@@ -8,7 +8,36 @@ package views
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-func Index() templ.Component {
+import (
+	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/models"
+	"strings"
+)
+
+func getInitials(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return "?"
+	}
+	if len(parts) == 1 {
+		return string(parts[0][0])
+	}
+	return string(parts[0][0]) + string(parts[1][0])
+}
+
+func groupBySpace(apps []models.Application) map[string][]models.Application {
+	grouped := make(map[string][]models.Application)
+	for _, app := range apps {
+		space := app.Space
+		if space == "" {
+			space = "other"
+		}
+		grouped[space] = append(grouped[space], app)
+	}
+	return grouped
+}
+
+func Index(userInfo *middleware.UserInfo, applications []models.Application) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -29,7 +58,321 @@ func Index() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<html lang=\"en\" class=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Cloak Apps</title><link href=\"/static/img/favicon.ico\" type=\"image/x-icon\" rel=\"icon\"><link href=\"/static/css/tailwind.css\" rel=\"stylesheet\"><script src=\"https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js\" integrity=\"sha384-ZBXiYtYQ6hJ2Y0ZNoYuI+Nq5MqWBr+chMrS/RkXpNzQCApHEhOt2aY8EJgqwHLkJ\" crossorigin=\"anonymous\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.5.0/dist/cdn.min.js\"></script></head><body class=\"bg-gray-50 dark:bg-gray-900 min-h-screen\" x-data=\"{\n            viewMode: localStorage.getItem('viewMode') || 'card',\n            userMenuOpen: false,\n            darkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,\n            activeEnvironment: 'shared',\n\n            // Mock application data with attributes\n            applications: [\n                { id: 'prometheus', name: 'Prometheus', description: 'Monitoring system and time series database', icon: '🔥', url: 'https://prometheus.company.com', attributes: { space: 'operations', environment: 'shared' } },\n                { id: 'grafana', name: 'Grafana', description: 'Analytics and interactive visualization platform', icon: '📊', url: 'https://grafana.company.com', attributes: { space: 'operations', environment: 'shared' } },\n                { id: 'keycloak', name: 'Keycloak', description: 'Identity and access management solution', icon: '🔐', url: 'https://keycloak.company.com', attributes: { space: 'tools', environment: 'shared' } },\n                { id: 'mattermost', name: 'Mattermost', description: 'Secure collaboration platform for teams', icon: '💬', url: 'https://mattermost.company.com', attributes: { space: 'tools', environment: 'production' } },\n                { id: 'vaultwarden', name: 'Vaultwarden', description: 'Password management and secure storage', icon: '🔒', url: 'https://vault.company.com', attributes: { space: 'tools', environment: 'production' } },\n                { id: 'docmost', name: 'Docmost', description: 'Collaborative documentation platform', icon: '📝', url: 'https://docs.company.com', attributes: { space: 'core', environment: 'development' } }\n            ],\n\n            toggleTheme() {\n                this.darkMode = !this.darkMode;\n                localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');\n                this.darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');\n            },\n\n            setViewMode(mode) {\n                this.viewMode = mode;\n                localStorage.setItem('viewMode', mode);\n            },\n\n            setEnvironment(env) {\n                this.activeEnvironment = env;\n            },\n\n            // Filter applications by environment (with wildcard support)\n            filteredApplications() {\n                if (this.activeEnvironment === 'shared') {\n                    return this.applications;\n                }\n                return this.applications.filter(app =>\n                    app.attributes.environment === this.activeEnvironment ||\n                    app.attributes.environment === 'shared'\n                );\n            },\n\n            // Group applications by space\n            groupedApplications() {\n                const filtered = this.filteredApplications();\n                const grouped = {};\n\n                filtered.forEach(app => {\n                    const space = app.attributes.space || 'other';\n                    if (!grouped[space]) {\n                        grouped[space] = [];\n                    }\n                    grouped[space].push(app);\n                });\n\n                return grouped;\n            },\n\n            // Get sorted space names\n            spaces() {\n                return Object.keys(this.groupedApplications()).sort();\n            }\n        }\" x-init=\"darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')\"><!-- Navbar --><nav class=\"bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8\"><div class=\"flex justify-between h-14\"><!-- Logo --><div class=\"flex items-center\"><div class=\"flex-shrink-0 flex items-center\"><svg class=\"h-6 w-6 text-blue-600 dark:text-blue-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\"></path></svg> <span class=\"ml-2 text-lg font-medium text-gray-900 dark:text-white\">Cloak Apps</span></div></div><!-- Right side: Dark mode toggle and User menu --><div class=\"flex items-center space-x-4\"><!-- Dark Mode Toggle --><button @click=\"toggleTheme()\" class=\"p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors\" title=\"Toggle dark mode\"><!-- Sun Icon (shown in dark mode) --><svg x-show=\"darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg><!-- Moon Icon (shown in light mode) --><svg x-show=\"!darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button><!-- User Menu --><div class=\"relative\" @click.away=\"userMenuOpen = false\"><button @click=\"userMenuOpen = !userMenuOpen\" class=\"flex items-center space-x-2 focus:outline-none\"><div class=\"h-7 w-7 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white text-sm font-medium\">JD</div><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><!-- Dropdown Menu --><div x-show=\"userMenuOpen\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-50\"><div class=\"px-4 py-2 border-b border-gray-100 dark:border-gray-700\"><p class=\"text-sm font-medium text-gray-900 dark:text-white\">John Doe</p><p class=\"text-xs text-gray-500 dark:text-gray-400\">john.doe@company.com</p></div><a href=\"#\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50\">Profile</a> <a href=\"#\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50\">Settings</a> <a href=\"#\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700\">Sign out</a></div></div></div></div></div></nav><!-- Main Content --><main class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\"><!-- Header --><div class=\"mb-8\"><div class=\"flex items-start justify-between mb-6\"><div><h1 class=\"text-2xl font-semibold text-gray-900 dark:text-white\">My Applications</h1><p class=\"mt-1 text-sm text-gray-500 dark:text-gray-400\">Access all your authorized applications</p></div><!-- View Toggle --><div class=\"flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5\"><button @click=\"setViewMode('card')\" :class=\"viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''\" class=\"p-1.5 rounded transition-colors\" title=\"Card view\"><svg class=\"h-4 w-4 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z\"></path></svg></button> <button @click=\"setViewMode('list')\" :class=\"viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''\" class=\"p-1.5 rounded transition-colors\" title=\"List view\"><svg class=\"h-4 w-4 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 6h16M4 12h16M4 18h16\"></path></svg></button></div></div><!-- Environment Filter --><div><label class=\"block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide\">Environment</label><div class=\"flex flex-wrap gap-2\"><button @click=\"setEnvironment('shared')\" :class=\"activeEnvironment === 'shared' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Shared</button> <button @click=\"setEnvironment('production')\" :class=\"activeEnvironment === 'production' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Production</button> <button @click=\"setEnvironment('development')\" :class=\"activeEnvironment === 'development' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Development</button></div></div></div><!-- Applications (Card View - Grouped by Space) --><div x-show=\"viewMode === 'card'\"><template x-for=\"space in spaces()\" :key=\"space\"><div class=\"mb-10\"><!-- Space Header --><h2 class=\"text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide\" x-text=\"space\"></h2><!-- Applications Grid --><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4\"><template x-for=\"app in groupedApplications()[space]\" :key=\"app.id\"><a :href=\"app.url\" class=\"block group\"><div class=\"bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28\"><div class=\"flex items-start space-x-3 h-full\"><div class=\"flex-shrink-0\"><div class=\"h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-xl\" x-text=\"app.icon\"></span></div></div><div class=\"flex-1 min-w-0 flex flex-col\"><h3 class=\"text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors\" x-text=\"app.name\"></h3><p class=\"mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2\" x-text=\"app.description\"></p></div></div></div></a></template></div></div></template></div><!-- Applications (List View - Grouped by Space) --><div x-show=\"viewMode === 'list'\"><template x-for=\"space in spaces()\" :key=\"space\"><div class=\"mb-8\"><!-- Space Header --><h2 class=\"text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide\" x-text=\"space\"></h2><!-- Applications List --><div class=\"space-y-1\"><template x-for=\"app in groupedApplications()[space]\" :key=\"app.id\"><a :href=\"app.url\" class=\"block group\"><div class=\"bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all\"><div class=\"flex items-center space-x-3\"><div class=\"flex-shrink-0\"><div class=\"h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-lg\" x-text=\"app.icon\"></span></div></div><div class=\"flex-1 min-w-0\"><h3 class=\"text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors\" x-text=\"app.name\"></h3><p class=\"text-xs text-gray-500 dark:text-gray-400\" x-text=\"app.description\"></p></div><div class=\"flex-shrink-0\"><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 5l7 7-7 7\"></path></svg></div></div></div></a></template></div></div></template></div></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<html lang=\"en\" class=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Cloak Apps</title><link href=\"/static/img/favicon.ico\" type=\"image/x-icon\" rel=\"icon\"><link href=\"/static/css/tailwind.css\" rel=\"stylesheet\"><script src=\"https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js\" integrity=\"sha384-ZBXiYtYQ6hJ2Y0ZNoYuI+Nq5MqWBr+chMrS/RkXpNzQCApHEhOt2aY8EJgqwHLkJ\" crossorigin=\"anonymous\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.5.0/dist/cdn.min.js\"></script></head><body class=\"bg-gray-50 dark:bg-gray-900 min-h-screen\" x-data=\"{\n            viewMode: localStorage.getItem('viewMode') || 'card',\n            userMenuOpen: false,\n            darkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,\n            activeEnvironment: 'shared',\n\n            toggleTheme() {\n                this.darkMode = !this.darkMode;\n                localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');\n                this.darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');\n            },\n\n            setViewMode(mode) {\n                this.viewMode = mode;\n                localStorage.setItem('viewMode', mode);\n            },\n\n            setEnvironment(env) {\n                this.activeEnvironment = env;\n            }\n        }\" x-init=\"darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')\"><!-- Navbar --><nav class=\"bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8\"><div class=\"flex justify-between h-14\"><!-- Logo --><div class=\"flex items-center\"><div class=\"flex-shrink-0 flex items-center\"><svg class=\"h-6 w-6 text-blue-600 dark:text-blue-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4\"></path></svg> <span class=\"ml-2 text-lg font-medium text-gray-900 dark:text-white\">Cloak Apps</span></div></div><!-- Right side: Dark mode toggle and User menu --><div class=\"flex items-center space-x-4\"><!-- Dark Mode Toggle --><button @click=\"toggleTheme()\" class=\"p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors\" title=\"Toggle dark mode\"><!-- Sun Icon (shown in dark mode) --><svg x-show=\"darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg><!-- Moon Icon (shown in light mode) --><svg x-show=\"!darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button><!-- User Menu --><div class=\"relative\" @click.away=\"userMenuOpen = false\"><button @click=\"userMenuOpen = !userMenuOpen\" class=\"flex items-center space-x-2 focus:outline-none\"><div class=\"h-7 w-7 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white text-sm font-medium\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var2 string
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(getInitials(userInfo.Name))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 101, Col: 68}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><!-- Dropdown Menu --><div x-show=\"userMenuOpen\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-50\"><div class=\"px-4 py-2 border-b border-gray-100 dark:border-gray-700\"><p class=\"text-sm font-medium text-gray-900 dark:text-white\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 119, Col: 116}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><p class=\"text-xs text-gray-500 dark:text-gray-400\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Email)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 120, Col: 108}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p></div><a href=\"/auth/logout\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700\">Sign out</a></div></div></div></div></div></nav><!-- Main Content --><main class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\"><!-- Header --><div class=\"mb-8\"><div class=\"flex items-start justify-between mb-6\"><div><h1 class=\"text-2xl font-semibold text-gray-900 dark:text-white\">My Applications</h1><p class=\"mt-1 text-sm text-gray-500 dark:text-gray-400\">Access all your authorized applications</p></div><!-- View Toggle --><div class=\"flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5\"><button @click=\"setViewMode('card')\" :class=\"viewMode === 'card' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''\" class=\"p-1.5 rounded transition-colors\" title=\"Card view\"><svg class=\"h-4 w-4 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2 a2 2 0 012 2v2 a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z\"></path></svg></button> <button @click=\"setViewMode('list')\" :class=\"viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm' : ''\" class=\"p-1.5 rounded transition-colors\" title=\"List view\"><svg class=\"h-4 w-4 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M4 6h16M4 12h16M4 18h16\"></path></svg></button></div></div><!-- Environment Filter --><div><label class=\"block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide\">Environment</label><div class=\"flex flex-wrap gap-2\"><button @click=\"setEnvironment('shared')\" :class=\"activeEnvironment === 'shared' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Shared</button> <button @click=\"setEnvironment('production')\" :class=\"activeEnvironment === 'production' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Production</button> <button @click=\"setEnvironment('development')\" :class=\"activeEnvironment === 'development' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'\" class=\"px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize\">Development</button></div></div></div><!-- Applications (Card View - Grouped by Space) --><div x-show=\"viewMode === 'card'\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for space, apps := range groupBySpace(applications) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"mb-10\"><!-- Space Header --><h2 class=\"text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(space)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 194, Col: 131}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</h2><!-- Applications Grid --><div class=\"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, app := range apps {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<!-- Environment filter via Alpine.js --> <div x-show=\"activeEnvironment === 'shared' || '{ app.Environment }' === activeEnvironment || '{ app.Environment }' === 'shared'\"><a href=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var6 templ.SafeURL
+				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(app.URL))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 201, Col: 72}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" target=\"_blank\" class=\"block group\"><div class=\"bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28\"><div class=\"flex items-start space-x-3 h-full\"><div class=\"flex-shrink-0\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if app.ThumbnailURL != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"h-10 w-10 rounded-md flex items-center justify-center overflow-hidden\"><img src=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var7 string
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(app.ThumbnailURL)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 207, Col: 91}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" alt=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var8 string
+					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 207, Col: 108}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" class=\"h-full w-full object-cover\"></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else if app.IconEmoji != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-xl\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var9 string
+					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(app.IconEmoji)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 211, Col: 101}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</span></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-xl\">📦</span></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div><div class=\"flex-1 min-w-0 flex flex-col\"><h3 class=\"text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var10 string
+				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 220, Col: 203}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</h3><p class=\"mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2\" title=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var11 string
+				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(app.Tooltip)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 221, Col: 145}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var12 string
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(app.Description)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 221, Col: 165}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</p></div></div></div></a></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div><!-- Applications (List View - Grouped by Space) --><div x-show=\"viewMode === 'list'\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for space, apps := range groupBySpace(applications) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"mb-8\"><!-- Space Header --><h2 class=\"text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var13 string
+			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(space)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 238, Col: 131}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</h2><!-- Applications List --><div class=\"space-y-1\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, app := range apps {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<!-- Environment filter via Alpine.js --> <div x-show=\"activeEnvironment === 'shared' || '{ app.Environment }' === activeEnvironment || '{ app.Environment }' === 'shared'\"><a href=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var14 templ.SafeURL
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(app.URL))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 245, Col: 72}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" target=\"_blank\" class=\"block group\"><div class=\"bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all\"><div class=\"flex items-center space-x-3\"><div class=\"flex-shrink-0\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if app.ThumbnailURL != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div class=\"h-9 w-9 rounded-md flex items-center justify-center overflow-hidden\"><img src=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var15 string
+					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(app.ThumbnailURL)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 251, Col: 91}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" alt=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var16 string
+					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 251, Col: 108}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" class=\"h-full w-full object-cover\"></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else if app.IconEmoji != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div class=\"h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-lg\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var17 string
+					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(app.IconEmoji)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 255, Col: 101}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</span></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<div class=\"h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center\"><span class=\"text-lg\">📦</span></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div><div class=\"flex-1 min-w-0\"><h3 class=\"text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var18 string
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 264, Col: 203}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</h3><p class=\"text-xs text-gray-500 dark:text-gray-400\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var19 string
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(app.Description)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 265, Col: 125}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</p></div><div class=\"flex-shrink-0\"><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M9 5l7 7-7 7\"></path></svg></div></div></div></a></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

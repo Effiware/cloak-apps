@@ -1,6 +1,35 @@
 package views
 
-templ Index() {
+import (
+	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/models"
+	"strings"
+)
+
+func getInitials(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return "?"
+	}
+	if len(parts) == 1 {
+		return string(parts[0][0])
+	}
+	return string(parts[0][0]) + string(parts[1][0])
+}
+
+func groupBySpace(apps []models.Application) map[string][]models.Application {
+	grouped := make(map[string][]models.Application)
+	for _, app := range apps {
+		space := app.Space
+		if space == "" {
+			space = "other"
+		}
+		grouped[space] = append(grouped[space], app)
+	}
+	return grouped
+}
+
+templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
     <html lang="en" class="dark">
         <head>
             <meta charset="UTF-8"/>
@@ -17,16 +46,6 @@ templ Index() {
             darkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,
             activeEnvironment: 'shared',
 
-            // Mock application data with attributes
-            applications: [
-                { id: 'prometheus', name: 'Prometheus', description: 'Monitoring system and time series database', icon: '🔥', url: 'https://prometheus.company.com', attributes: { space: 'operations', environment: 'shared' } },
-                { id: 'grafana', name: 'Grafana', description: 'Analytics and interactive visualization platform', icon: '📊', url: 'https://grafana.company.com', attributes: { space: 'operations', environment: 'shared' } },
-                { id: 'keycloak', name: 'Keycloak', description: 'Identity and access management solution', icon: '🔐', url: 'https://keycloak.company.com', attributes: { space: 'tools', environment: 'shared' } },
-                { id: 'mattermost', name: 'Mattermost', description: 'Secure collaboration platform for teams', icon: '💬', url: 'https://mattermost.company.com', attributes: { space: 'tools', environment: 'production' } },
-                { id: 'vaultwarden', name: 'Vaultwarden', description: 'Password management and secure storage', icon: '🔒', url: 'https://vault.company.com', attributes: { space: 'tools', environment: 'production' } },
-                { id: 'docmost', name: 'Docmost', description: 'Collaborative documentation platform', icon: '📝', url: 'https://docs.company.com', attributes: { space: 'core', environment: 'development' } }
-            ],
-
             toggleTheme() {
                 this.darkMode = !this.darkMode;
                 localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
@@ -40,38 +59,6 @@ templ Index() {
 
             setEnvironment(env) {
                 this.activeEnvironment = env;
-            },
-
-            // Filter applications by environment (with wildcard support)
-            filteredApplications() {
-                if (this.activeEnvironment === 'shared') {
-                    return this.applications;
-                }
-                return this.applications.filter(app =>
-                    app.attributes.environment === this.activeEnvironment ||
-                    app.attributes.environment === 'shared'
-                );
-            },
-
-            // Group applications by space
-            groupedApplications() {
-                const filtered = this.filteredApplications();
-                const grouped = {};
-
-                filtered.forEach(app => {
-                    const space = app.attributes.space || 'other';
-                    if (!grouped[space]) {
-                        grouped[space] = [];
-                    }
-                    grouped[space].push(app);
-                });
-
-                return grouped;
-            },
-
-            // Get sorted space names
-            spaces() {
-                return Object.keys(this.groupedApplications()).sort();
             }
         }" x-init="darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')">
             <!-- Navbar -->
@@ -111,7 +98,7 @@ templ Index() {
                                     @click="userMenuOpen = !userMenuOpen"
                                     class="flex items-center space-x-2 focus:outline-none">
                                     <div class="h-7 w-7 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-                                        JD
+                                        { getInitials(userInfo.Name) }
                                     </div>
                                     <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -129,12 +116,10 @@ templ Index() {
                                     x-transition:leave-end="transform opacity-0 scale-95"
                                     class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-50">
                                     <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white">John Doe</p>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400">john.doe@company.com</p>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">{ userInfo.Name }</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">{ userInfo.Email }</p>
                                     </div>
-                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">Profile</a>
-                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50">Settings</a>
-                                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700">Sign out</a>
+                                    <a href="/auth/logout" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700">Sign out</a>
                                 </div>
                             </div>
                         </div>
@@ -160,7 +145,7 @@ templ Index() {
                                 class="p-1.5 rounded transition-colors"
                                 title="Card view">
                                 <svg class="h-4 w-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2 a2 2 0 012 2v2 a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
                                 </svg>
                             </button>
                             <button
@@ -203,69 +188,95 @@ templ Index() {
 
                 <!-- Applications (Card View - Grouped by Space) -->
                 <div x-show="viewMode === 'card'">
-                    <template x-for="space in spaces()" :key="space">
+                    for space, apps := range groupBySpace(applications) {
                         <div class="mb-10">
                             <!-- Space Header -->
-                            <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide" x-text="space"></h2>
+                            <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide">{ space }</h2>
 
                             <!-- Applications Grid -->
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <template x-for="app in groupedApplications()[space]" :key="app.id">
-                                    <a :href="app.url" class="block group">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28">
-                                            <div class="flex items-start space-x-3 h-full">
-                                                <div class="flex-shrink-0">
-                                                    <div class="h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
-                                                        <span class="text-xl" x-text="app.icon"></span>
+                                for _, app := range apps {
+                                    <!-- Environment filter via Alpine.js -->
+                                    <div x-show="activeEnvironment === 'shared' || '{ app.Environment }' === activeEnvironment || '{ app.Environment }' === 'shared'">
+                                        <a href={ templ.SafeURL(app.URL) } target="_blank" class="block group">
+                                            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28">
+                                                <div class="flex items-start space-x-3 h-full">
+                                                    <div class="flex-shrink-0">
+                                                        if app.ThumbnailURL != "" {
+                                                            <div class="h-10 w-10 rounded-md flex items-center justify-center overflow-hidden">
+                                                                <img src={ app.ThumbnailURL } alt={ app.Name } class="h-full w-full object-cover"/>
+                                                            </div>
+                                                        } else if app.IconEmoji != "" {
+                                                            <div class="h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+                                                                <span class="text-xl">{ app.IconEmoji }</span>
+                                                            </div>
+                                                        } else {
+                                                            <div class="h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+                                                                <span class="text-xl">📦</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div class="flex-1 min-w-0 flex flex-col">
+                                                        <h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{ app.Name }</h3>
+                                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2" title={ app.Tooltip }>{ app.Description }</p>
                                                     </div>
                                                 </div>
-                                                <div class="flex-1 min-w-0 flex flex-col">
-                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" x-text="app.name"></h3>
-                                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2" x-text="app.description"></p>
-                                                </div>
                                             </div>
-                                        </div>
-                                    </a>
-                                </template>
+                                        </a>
+                                    </div>
+                                }
                             </div>
                         </div>
-                    </template>
+                    }
                 </div>
 
                 <!-- Applications (List View - Grouped by Space) -->
                 <div x-show="viewMode === 'list'">
-                    <template x-for="space in spaces()" :key="space">
+                    for space, apps := range groupBySpace(applications) {
                         <div class="mb-8">
                             <!-- Space Header -->
-                            <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide" x-text="space"></h2>
+                            <h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">{ space }</h2>
 
                             <!-- Applications List -->
                             <div class="space-y-1">
-                                <template x-for="app in groupedApplications()[space]" :key="app.id">
-                                    <a :href="app.url" class="block group">
-                                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all">
-                                            <div class="flex items-center space-x-3">
-                                                <div class="flex-shrink-0">
-                                                    <div class="h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
-                                                        <span class="text-lg" x-text="app.icon"></span>
+                                for _, app := range apps {
+                                    <!-- Environment filter via Alpine.js -->
+                                    <div x-show="activeEnvironment === 'shared' || '{ app.Environment }' === activeEnvironment || '{ app.Environment }' === 'shared'">
+                                        <a href={ templ.SafeURL(app.URL) } target="_blank" class="block group">
+                                            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all">
+                                                <div class="flex items-center space-x-3">
+                                                    <div class="flex-shrink-0">
+                                                        if app.ThumbnailURL != "" {
+                                                            <div class="h-9 w-9 rounded-md flex items-center justify-center overflow-hidden">
+                                                                <img src={ app.ThumbnailURL } alt={ app.Name } class="h-full w-full object-cover"/>
+                                                            </div>
+                                                        } else if app.IconEmoji != "" {
+                                                            <div class="h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+                                                                <span class="text-lg">{ app.IconEmoji }</span>
+                                                            </div>
+                                                        } else {
+                                                            <div class="h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+                                                                <span class="text-lg">📦</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{ app.Name }</h3>
+                                                        <p class="text-xs text-gray-500 dark:text-gray-400">{ app.Description }</p>
+                                                    </div>
+                                                    <div class="flex-shrink-0">
+                                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                                        </svg>
                                                     </div>
                                                 </div>
-                                                <div class="flex-1 min-w-0">
-                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" x-text="app.name"></h3>
-                                                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="app.description"></p>
-                                                </div>
-                                                <div class="flex-shrink-0">
-                                                    <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                                    </svg>
-                                                </div>
                                             </div>
-                                        </div>
-                                    </a>
-                                </template>
+                                        </a>
+                                    </div>
+                                }
                             </div>
                         </div>
-                    </template>
+                    }
                 </div>
             </main>
         </body>

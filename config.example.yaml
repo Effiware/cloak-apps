@@ -1,6 +1,6 @@
 keycloak:
   url: "http://localhost:8082"
-  realm: "cloak-apps"
+  realm: "cloak-apps-realm"
   client_id: "cloak-apps-portal"
   client_secret: "<PASTE_CLIENT_SECRET_FROM_KEYCLOAK>"
   redirect_uri: "http://localhost:8080/auth/callback"
