@@ -15,16 +15,16 @@ templ Index() {
             viewMode: localStorage.getItem('viewMode') || 'card',
             userMenuOpen: false,
             darkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,
-            activeEnvironment: 'all',
+            activeEnvironment: 'shared',
 
             // Mock application data with attributes
             applications: [
-                { id: 'prometheus', name: 'Prometheus', description: 'Monitoring system and time series database', icon: '🔥', url: 'https://prometheus.company.com', attributes: { space: 'operations', environment: 'all' } },
-                { id: 'grafana', name: 'Grafana', description: 'Analytics and interactive visualization platform', icon: '📊', url: 'https://grafana.company.com', attributes: { space: 'operations', environment: 'all' } },
-                { id: 'keycloak', name: 'Keycloak', description: 'Identity and access management solution', icon: '🔐', url: 'https://keycloak.company.com', attributes: { space: 'tools', environment: 'all' } },
+                { id: 'prometheus', name: 'Prometheus', description: 'Monitoring system and time series database', icon: '🔥', url: 'https://prometheus.company.com', attributes: { space: 'operations', environment: 'shared' } },
+                { id: 'grafana', name: 'Grafana', description: 'Analytics and interactive visualization platform', icon: '📊', url: 'https://grafana.company.com', attributes: { space: 'operations', environment: 'shared' } },
+                { id: 'keycloak', name: 'Keycloak', description: 'Identity and access management solution', icon: '🔐', url: 'https://keycloak.company.com', attributes: { space: 'tools', environment: 'shared' } },
                 { id: 'mattermost', name: 'Mattermost', description: 'Secure collaboration platform for teams', icon: '💬', url: 'https://mattermost.company.com', attributes: { space: 'tools', environment: 'production' } },
                 { id: 'vaultwarden', name: 'Vaultwarden', description: 'Password management and secure storage', icon: '🔒', url: 'https://vault.company.com', attributes: { space: 'tools', environment: 'production' } },
-                { id: 'docmost', name: 'Docmost', description: 'Collaborative documentation platform', icon: '📝', url: 'https://docs.company.com', attributes: { space: 'mvp', environment: 'development' } }
+                { id: 'docmost', name: 'Docmost', description: 'Collaborative documentation platform', icon: '📝', url: 'https://docs.company.com', attributes: { space: 'core', environment: 'development' } }
             ],
 
             toggleTheme() {
@@ -44,12 +44,12 @@ templ Index() {
 
             // Filter applications by environment (with wildcard support)
             filteredApplications() {
-                if (this.activeEnvironment === 'all') {
+                if (this.activeEnvironment === 'shared') {
                     return this.applications;
                 }
                 return this.applications.filter(app =>
                     app.attributes.environment === this.activeEnvironment ||
-                    app.attributes.environment === 'all'
+                    app.attributes.environment === 'shared'
                 );
             },
 
@@ -180,10 +180,10 @@ templ Index() {
                         <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Environment</label>
                         <div class="flex flex-wrap gap-2">
                             <button
-                                @click="setEnvironment('all')"
-                                :class="activeEnvironment === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                                @click="setEnvironment('shared')"
+                                :class="activeEnvironment === 'shared' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
                                 class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize">
-                                All
+                                Shared
                             </button>
                             <button
                                 @click="setEnvironment('production')"

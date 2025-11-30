@@ -31,7 +31,7 @@ services:
     environment:
       - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}  # Overwritten by env var
     volumes:
-      - ./config.yaml:/root/config.yaml:ro
+      - ./config.yaml:/app/config.yaml:ro
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.2

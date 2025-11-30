@@ -10,9 +10,11 @@ import (
 // Config struct holds file structure of a configuration file
 type Config struct {
 	Keycloak struct {
-		Url      string `mapstructure:"url"`
-		Realm    string `mapstructure:"realm"`
-		ClientId string `mapstructure:"client_id"`
+		Url          string `mapstructure:"url"`
+		Realm        string `mapstructure:"realm"`
+		ClientId     string `mapstructure:"client_id"`
+		ClientSecret string `mapstructure:"client_secret"`
+		RedirectUri  string `mapstructure:"redirect_uri"`
 	} `mapstructure:"keycloak"`
 
 	Server struct {
@@ -20,6 +22,11 @@ type Config struct {
 		Host    string `mapstructure:"host"`
 		Timeout int    `mapstructure:"timeout"`
 	} `mapstructure:"server"`
+
+	Session struct {
+		Secret string `mapstructure:"secret"`
+		MaxAge string `mapstructure:"max_age"`
+	} `mapstructure:"session"`
 }
 
 // LoadConfig reads and validates configuration

@@ -23,7 +23,7 @@ RUN npm run build
 RUN go build -o ./bin/main cmd/server/main.go
 
 FROM alpine:latest
-WORKDIR /root/
+WORKDIR /app
 
 # Copies binary from previous container
 COPY --from=builder /app/bin/main .

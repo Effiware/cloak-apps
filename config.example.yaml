@@ -1,9 +1,15 @@
 keycloak:
   url: "http://localhost:8082"
   realm: "cloak-apps"
-  client_id: "cloak-apps-client"
+  client_id: "cloak-apps-portal"
+  client_secret: "<PASTE_CLIENT_SECRET_FROM_KEYCLOAK>"
+  redirect_uri: "http://localhost:8080/auth/callback"
 
 server:
   port: 8080
 #  host: "localhost"
 #  timeout: 10
+
+session:
+  secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"
+  max_age: 3600  # 1 hour
