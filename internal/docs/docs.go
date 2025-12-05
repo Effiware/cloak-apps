@@ -10,7 +10,7 @@ const docTemplate = `{
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
         "contact": {
-            "name": "EffiSupport",
+            "name": "Effi-Support",
             "url": "https://www.effiware.com/contact",
             "email": "contact@effiware.com"
         },
@@ -23,6 +23,22 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/applications": {
+            "get": {
+                "description": "List assigned applications for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "applications"
+                ],
+                "summary": "List assigned applications",
+                "responses": {}
+            }
+        },
         "/clicks": {
             "get": {
                 "description": "Retrieve the total number of clicks recorded in the system",
@@ -52,6 +68,21 @@ const docTemplate = `{
                     "clicks"
                 ],
                 "summary": "Increment the number of clicks",
+                "responses": {}
+            }
+        },
+        "/organization": {
+            "get": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "organization"
+                ],
+                "summary": "Get organization",
                 "responses": {}
             }
         }

@@ -29,7 +29,7 @@ func groupBySpace(apps []models.Application) map[string][]models.Application {
 	return grouped
 }
 
-templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
+templ Index(userInfo *middleware.UserInfo, organization models.Organization, applications []models.Application) {
     <html lang="en" class="dark">
         <head>
             <meta charset="UTF-8"/>
@@ -68,10 +68,11 @@ templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
                         <!-- Logo -->
                         <div class="flex items-center">
                             <div class="flex-shrink-0 flex items-center">
-                                <svg class="h-6 w-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                                </svg>
-                                <span class="ml-2 text-lg font-medium text-gray-900 dark:text-white">Cloak Apps</span>
+                                <a href="https://github.com/Effiware/cloak-apps"><img class="h-14 w-14 text-blue-600 dark:text-blue-400" src="/static/img/launcher-stack.svg" alt="CloakApps Logo"/></a>
+                                <div class="ml-2">
+                                    <span class="text-lg font-medium text-gray-900 dark:text-white"><a href="https://github.com/Effiware/cloak-apps">Cloak Apps</a></span>
+                                    <p class="font-extralight text-xs text-gray-900 dark:text-white"><a class="text-yellow-600 dark:text-yellow-400" href="https://effiware.com"><u>Effiware</u></a> product</p>
+                                </div>
                             </div>
                         </div>
 
@@ -97,7 +98,7 @@ templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
                                 <button
                                     @click="userMenuOpen = !userMenuOpen"
                                     class="flex items-center space-x-2 focus:outline-none">
-                                    <div class="h-7 w-7 rounded-full bg-blue-600 dark:bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+                                    <div class="h-7 w-7 rounded-full bg-yellow-600 dark:bg-yellow-500 flex items-center justify-center text-white dark:text-gray-600 text-sm font-medium">
                                         { getInitials(userInfo.Name) }
                                     </div>
                                     <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,8 +134,14 @@ templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
                 <div class="mb-8">
                     <div class="flex items-start justify-between mb-6">
                         <div>
-                            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">My Applications</h1>
-                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Access all your authorized applications</p>
+                            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">My {organization.Name} Applications</h1>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                if organization.CustomDescription != "" {
+                                    { organization.CustomDescription }
+                                } else {
+                                    Access all your authorized applications and services
+                                }
+                            </p>
                         </div>
 
                         <!-- View Toggle -->
@@ -166,19 +173,19 @@ templ Index(userInfo *middleware.UserInfo, applications []models.Application) {
                         <div class="flex flex-wrap gap-2">
                             <button
                                 @click="setEnvironment('shared')"
-                                :class="activeEnvironment === 'shared' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                                :class="activeEnvironment === 'shared' ? 'bg-yellow-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
                                 class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize">
                                 Shared
                             </button>
                             <button
                                 @click="setEnvironment('production')"
-                                :class="activeEnvironment === 'production' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                                :class="activeEnvironment === 'production' ? 'bg-yellow-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
                                 class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize">
                                 Production
                             </button>
                             <button
                                 @click="setEnvironment('development')"
-                                :class="activeEnvironment === 'development' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
+                                :class="activeEnvironment === 'development' ? 'bg-yellow-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'"
                                 class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize">
                                 Development
                             </button>

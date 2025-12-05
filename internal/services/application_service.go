@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
@@ -31,46 +31,44 @@ func NewApplicationService(adminClient *keycloak.AdminClient) (*ApplicationServi
 }
 
 // loadClientScopes fetches all client scopes and builds ID→name mapping
-func (s *ApplicationService) loadClientScopes(ctx context.Context) error {
-	scopes, err := s.adminClient.GetClientScopes(ctx)
+func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
+	scopes, err := as.adminClient.GetClientScopes(ctx)
 	if err != nil {
 		return err
 	}
 
 	for _, scope := range scopes {
-		s.clientScopes[scope.ID] = scope.Name
+		as.clientScopes[scope.ID] = scope.Name
 	}
 
-	log.Printf("Loaded %d client scopes", len(s.clientScopes))
-	log.Printf("[DEBUG] Client scope mappings: %+v", s.clientScopes)
+	slog.Debug("Loaded client scopes,", "total_number", len(as.clientScopes))
+	slog.Debug("Client scope", "mappings", as.clientScopes)
 	return nil
 }
 
 // GetApplicationsForUser fetches all clients and filters based on user's roles
-func (s *ApplicationService) GetApplicationsForUser(ctx context.Context, userInfo *middleware.UserInfo) ([]models.Application, error) {
-	// Fetch all clients from Keycloak
-	clients, err := s.adminClient.GetClients(ctx)
+func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userInfo *middleware.UserInfo) ([]models.Application, error) {
+	clients, err := as.adminClient.GetClients(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get clients: %w", err)
 	}
 
 	// Debug logging for application discovery
-	log.Printf("[DEBUG] Fetching applications for user %s with client roles: %+v",
-		userInfo.PreferredUsername, userInfo.ClientRoles)
-	log.Printf("[DEBUG] Total clients from Keycloak: %d", len(clients))
+	slog.Debug("Fetching applications for", "user", userInfo.PreferredUsername, "roles", userInfo.ClientRoles)
+	slog.Debug("Total clients length from Keycloak: ", "length", len(clients))
 
 	var applications []models.Application
 
 	for _, client := range clients {
 		// Skip internal Keycloak clients (realm-management, account, etc.)
-		if s.isInternalClient(client.ClientID) {
+		if as.isInternalClient(client.ClientID) {
 			continue
 		}
 
 		// Transform client to application
-		app, err := s.transformClientToApplication(&client)
+		app, err := as.transformClientToApplication(&client)
 		if err != nil {
-			log.Printf("Failed to transform client %s: %v", client.ClientID, err)
+			slog.Debug("Failed to transform,", "client", client.ClientID, "error", err)
 			continue
 		}
 
@@ -78,22 +76,21 @@ func (s *ApplicationService) GetApplicationsForUser(ctx context.Context, userInf
 		if roles, hasRoles := userInfo.ClientRoles[client.ClientID]; hasRoles && len(roles) > 0 {
 			app.HasAccess = true
 			applications = append(applications, *app)
-			log.Printf("[DEBUG] Access GRANTED for client '%s' - User has roles: %v", client.ClientID, roles)
+			slog.Debug("Access GRANTED for", "client", client.ClientID, "roles", roles)
 		} else {
-			log.Printf("[DEBUG] Access DENIED for client '%s' - User has no roles", client.ClientID)
+			slog.Debug("Access DENIED for", "client", client.ClientID, "roles", roles)
 		}
 	}
 
-	log.Printf("Found %d accessible applications for user %s", len(applications), userInfo.PreferredUsername)
+	slog.Debug("Found accessible applications for", "user", userInfo.PreferredUsername, "applications", len(applications))
 	return applications, nil
 }
 
 // transformClientToApplication converts Keycloak client to Application model
-func (s *ApplicationService) transformClientToApplication(client *keycloak.ClientRepresentation) (*models.Application, error) {
-	// Parse Description JSON
+func (as *ApplicationService) transformClientToApplication(client *keycloak.ClientRepresentation) (*models.Application, error) {
 	metadata, err := keycloak.ParseDescriptionJSON(client.Description)
 	if err != nil {
-		log.Printf("Warning: Failed to parse description for client %s: %v", client.ClientID, err)
+		slog.Warn("Failed to parse description for", "client", client.ClientID, "error", err)
 		// Use fallback - default to SSO disabled for safety
 		metadata = &keycloak.DescriptionMetadata{
 			Text:       client.Description,
@@ -102,13 +99,13 @@ func (s *ApplicationService) transformClientToApplication(client *keycloak.Clien
 	}
 
 	// Extract space from optional scopes
-	space := s.extractScopeCategory(client.OptionalClientScopes, "space-")
-	environment := s.extractScopeCategory(client.OptionalClientScopes, "env-")
+	space := as.extractScopeCategory(client.OptionalClientScopes, "space-")
+	environment := as.extractScopeCategory(client.OptionalClientScopes, "env-")
 
 	// Debug logging for metadata extraction
-	log.Printf("[DEBUG] Client '%s' - OptionalClientScopes: %v", client.ClientID, client.OptionalClientScopes)
-	log.Printf("[DEBUG] Client '%s' - Extracted space: '%s', environment: '%s'", client.ClientID, space, environment)
-	log.Printf("[DEBUG] Client '%s' - Attributes: %+v", client.ClientID, client.Attributes)
+	slog.Debug("", "Client", client.ClientID, "OptionalClientScopes", client.OptionalClientScopes)
+	slog.Debug("", "Client", client.ClientID, "Space", space, "Environment", environment)
+	slog.Debug("", "Client", client.ClientID, "Attributes", client.Attributes)
 
 	// Extract thumbnail URL from attributes
 	thumbnailURL := ""
@@ -116,8 +113,8 @@ func (s *ApplicationService) transformClientToApplication(client *keycloak.Clien
 		// Keycloak uses 'logoUri' not 'logoUrl'
 		thumbnailURL = client.Attributes["logoUri"]
 	}
-	log.Printf("[DEBUG] Client '%s' - ThumbnailURL: '%s'", client.ClientID, thumbnailURL)
-	log.Printf("[DEBUG] Client '%s' - SSOEnabled: %v, URL: '%s'", client.ClientID, metadata.SSOEnabled, client.BaseURL)
+	slog.Debug("", "Client", client.ClientID, "ThumbnailURL", thumbnailURL)
+	slog.Debug("", "Client", client.ClientID, "SSOEnabled", metadata.SSOEnabled, "URL", client.BaseURL)
 
 	return &models.Application{
 		ID:           client.ID,
@@ -140,7 +137,7 @@ func (s *ApplicationService) transformClientToApplication(client *keycloak.Clien
 // extractScopeCategory extracts value from scope name with given prefix
 // Example: extractScopeCategory(["space-operations", "env-shared"], "space-")
 // returns "operations"
-func (s *ApplicationService) extractScopeCategory(scopeNames []string, prefix string) string {
+func (as *ApplicationService) extractScopeCategory(scopeNames []string, prefix string) string {
 	// OptionalClientScopes contains scope names directly, not IDs
 	for _, scopeName := range scopeNames {
 		if strings.HasPrefix(scopeName, prefix) {
@@ -153,7 +150,7 @@ func (s *ApplicationService) extractScopeCategory(scopeNames []string, prefix st
 }
 
 // isInternalClient checks if a client is a Keycloak internal client
-func (s *ApplicationService) isInternalClient(clientID string) bool {
+func (as *ApplicationService) isInternalClient(clientID string) bool {
 	internalClients := []string{
 		"account",
 		"account-console",
@@ -175,6 +172,6 @@ func (s *ApplicationService) isInternalClient(clientID string) bool {
 
 // RefreshClientScopes reloads client scopes mapping
 // Useful if scopes are added/modified at runtime
-func (s *ApplicationService) RefreshClientScopes(ctx context.Context) error {
-	return s.loadClientScopes(ctx)
+func (as *ApplicationService) RefreshClientScopes(ctx context.Context) error {
+	return as.loadClientScopes(ctx)
 }

@@ -3,7 +3,7 @@ host: localhost:8080
 info:
   contact:
     email: contact@effiware.com
-    name: EffiSupport
+    name: Effi-Support
     url: https://www.effiware.com/contact
   description: This is an example server for a GOTH template application.
   license:
@@ -12,6 +12,17 @@ info:
   title: GOTH Template API
   version: "1.0"
 paths:
+  /applications:
+    get:
+      consumes:
+      - application/json
+      description: List assigned applications for the authenticated user
+      produces:
+      - application/json
+      responses: {}
+      summary: List assigned applications
+      tags:
+      - applications
   /clicks:
     get:
       consumes:
@@ -35,6 +46,16 @@ paths:
       summary: Increment the number of clicks
       tags:
       - clicks
+  /organization:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses: {}
+      summary: Get organization
+      tags:
+      - organization
 schemes:
 - http
 swagger: "2.0"

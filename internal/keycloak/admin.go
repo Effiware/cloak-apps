@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -131,7 +131,7 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 
 	// If we get 401, token expired - refresh and retry once
 	if resp.StatusCode == http.StatusUnauthorized {
-		log.Printf("Admin API token expired, refreshing...")
+		slog.Debug("Admin API token expired, refreshing...")
 		if err := ac.GetServiceAccountToken(ctx); err != nil {
 			return nil, fmt.Errorf("failed to refresh token: %w", err)
 		}

@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -17,6 +17,7 @@ type HdaAndApi struct {
 	keycloakClient *keycloak.Client
 	authHandlers   *auth.Handlers
 	sessionStore   *session.Store
+	orgService     *services.OrganizationService
 	appService     *services.ApplicationService
 }
 
@@ -24,12 +25,14 @@ func NewHdaAndApi(
 	keycloakClient *keycloak.Client,
 	authHandlers *auth.Handlers,
 	sessionStore *session.Store,
+	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
 ) *HdaAndApi {
 	return &HdaAndApi{
 		keycloakClient: keycloakClient,
 		authHandlers:   authHandlers,
 		sessionStore:   sessionStore,
+		orgService:     orgService,
 		appService:     appService,
 	}
 }
@@ -41,9 +44,10 @@ func HttpServer(
 	keycloakClient *keycloak.Client,
 	authHandlers *auth.Handlers,
 	sessionStore *session.Store,
+	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
 ) *http.Server {
-	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, appService)
+	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, orgService, appService)
 	readTimeout, writeTimout, idleTimeout := time.Duration(timeout), time.Duration(3*timeout), time.Duration(6*timeout)
 
 	server := &http.Server{
@@ -60,5 +64,5 @@ func HttpServer(
 
 func onServerShutdown() {
 	// Add graceful shutdown logic if needed
-	log.Println("Server shutdown complete")
+	slog.Debug("Server shutdown complete")
 }

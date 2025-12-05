@@ -2,7 +2,7 @@ package session
 
 import (
 	"encoding/gob"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -39,7 +39,8 @@ func NewStore(secret string, maxAge int) *Store {
 
 	// Create session directory if it doesn't exist
 	if err := os.MkdirAll(sessionDir, 0700); err != nil {
-		log.Fatalf("Failed to create session directory: %v", err)
+		slog.Error("Failed to create session directory,", "error", err)
+		os.Exit(1)
 	}
 
 	store := sessions.NewFilesystemStore(sessionDir, []byte(secret))

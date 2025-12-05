@@ -32,8 +32,8 @@ notify-templ-proxy:
 
 air:
 	@trap 'make docker-down; exit' INT TERM; \
-	make templ & sleep 1; \
 	make docker-up-keycloak & sleep 10; \
+	make templ & sleep 1; \
 	go tool air; \
 	make docker-down
 

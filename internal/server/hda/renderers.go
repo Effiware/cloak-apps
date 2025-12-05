@@ -1,7 +1,7 @@
 package hda
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/server/middleware"
@@ -13,26 +13,30 @@ import (
 
 var clicks *models.Clicks = models.ClicksStore
 
-func RenderRoot(appService *services.ApplicationService) ViewHandlerT {
+func RenderRoot(orgService *services.OrganizationService, appService *services.ApplicationService) ViewHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		// Get user info from context
 		userInfo, ok := middleware.GetUserFromContext(r.Context())
 		if !ok {
-			log.Printf("Failed to get user from context")
+			slog.Error("Failed to get user from context")
 			return &UnauthorizedError{Message: "User not authenticated"}
 		}
 
-		// Fetch applications for user
+		organization, err := orgService.GetOrganization()
+		if err != nil {
+			slog.Error("Failed to load organization,", "error", err)
+		}
+
 		applications, err := appService.GetApplicationsForUser(r.Context(), userInfo)
 		if err != nil {
-			log.Printf("Failed to get applications: %v", err)
+			slog.Error("Failed to get applications,", "error", err)
 			return err
 		}
 
-		log.Printf("Rendering for user: %s with %d applications", userInfo.PreferredUsername, len(applications))
+		slog.Debug("Rendering for", "user", userInfo.PreferredUsername, "applications", len(applications))
 
 		// Render template with real data
-		template := views.Index(userInfo, applications)
+		template := views.Index(userInfo, organization, applications)
 		return template.Render(r.Context(), w)
 	}
 }

@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	_ "github.com/effiware/cloak-apps/internal/docs"
@@ -19,14 +19,14 @@ func JsonHandler(endpointHandler EndpointHandlerT) http.HandlerFunc {
 
 		code, payload, err := endpointHandler(w, r)
 		if err != nil {
-			log.Printf("Error: %s", err.Error())
+			slog.Error("EndpointHandler,", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		jsonPay, err := json.Marshal(payload)
 		if err != nil {
-			log.Printf("Error when marshaling JSON: %s", err)
+			slog.Error("When marshaling JSON,", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -63,7 +63,33 @@ func IncrementClicks(w http.ResponseWriter, r *http.Request) (int, any, error) {
 	return http.StatusNoContent, map[string]string{}, nil
 }
 
+// GetOrganization returns a handler that loads organization info
+// @Summary Get organization
+// @Detail Get organization details
+// @Tags organization
+// @Accept json
+// @Produce json
+// @Router /organization [get]
+func GetOrganization(orgService interface {
+	GetOrganization() (models.Organization, error)
+}) EndpointHandlerT {
+	return func(w http.ResponseWriter, r *http.Request) (int, any, error) {
+		organization, err := orgService.GetOrganization()
+		if err != nil {
+			slog.Error("Failed to load organization,", "error", err)
+			return http.StatusInternalServerError, map[string]string{"error": "failed to load organization info"}, nil
+		}
+		return http.StatusOK, organization, nil
+	}
+}
+
 // GetApplications returns a handler that fetches applications for the authenticated user
+// @Summary List assigned applications
+// @Description List assigned applications for the authenticated user
+// @Tags applications
+// @Accept json
+// @Produce json
+// @Router /applications [get]
 func GetApplications(appService interface {
 	GetApplicationsForUser(ctx context.Context, userInfo *middleware.UserInfo) ([]models.Application, error)
 }) EndpointHandlerT {
@@ -74,10 +100,9 @@ func GetApplications(appService interface {
 			return http.StatusUnauthorized, map[string]string{"error": "unauthorized"}, nil
 		}
 
-		// Fetch applications
 		applications, err := appService.GetApplicationsForUser(r.Context(), userInfo)
 		if err != nil {
-			log.Printf("Failed to get applications: %v", err)
+			slog.Error("Failed to get applications,", "error", err)
 			return http.StatusInternalServerError, map[string]string{"error": "failed to fetch applications"}, nil
 		}
 

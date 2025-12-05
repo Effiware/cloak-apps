@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
@@ -104,10 +104,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 			}
 
 			// Debug logging for token claims
-			log.Printf("[DEBUG] User %s authenticated - ClientRoles: %+v",
-				userInfo.PreferredUsername, userInfo.ClientRoles)
-			log.Printf("[DEBUG] User %s has roles in %d clients",
-				userInfo.PreferredUsername, len(userInfo.ClientRoles))
+			slog.Debug("Authenticated", "User", userInfo.PreferredUsername, "ClientRoles", userInfo.ClientRoles)
 
 			// Store user info in context
 			ctx := context.WithValue(r.Context(), UserContextKey, userInfo)

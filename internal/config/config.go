@@ -18,15 +18,22 @@ type Config struct {
 	} `mapstructure:"keycloak"`
 
 	Server struct {
-		Port    int    `mapstructure:"port"`
-		Host    string `mapstructure:"host"`
-		Timeout int    `mapstructure:"timeout"`
+		Port     int    `mapstructure:"port"`
+		Host     string `mapstructure:"host"`
+		Timeout  int    `mapstructure:"timeout"`
+		LogLevel string `mapstructure:"log_level"`
 	} `mapstructure:"server"`
 
 	Session struct {
 		Secret string `mapstructure:"secret"`
 		MaxAge string `mapstructure:"max_age"`
 	} `mapstructure:"session"`
+
+	Organization struct {
+		Name              string `mapstructure:"name"`
+		HomeUrl           string `mapstructure:"home_url"`
+		CustomDescription string `mapstructure:"custom_description"`
+	} `mapstructure:"organization"`
 }
 
 // LoadConfig reads and validates configuration
@@ -38,6 +45,7 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.timeout", 10)
+	viper.SetDefault("server.log_level", "DEBUG")
 
 	// env overrides
 	viper.SetEnvPrefix("CLOAKAPPS")

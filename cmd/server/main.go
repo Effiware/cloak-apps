@@ -2,7 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
 	"strconv"
 
 	"github.com/effiware/cloak-apps/internal/config"
@@ -17,8 +18,18 @@ func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		slog.Error("Failed to load configuration file,", "error", err)
+		os.Exit(1)
 	}
+
+	// Initialize global logger with desired level
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(cfg.Server.LogLevel)); err == nil {
+		slog.SetLogLoggerLevel(level)
+	} else {
+		slog.Error("Error while unmarshalling log level,", "error", err)
+	}
+	slog.Info("Initialized log", "level", level)
 
 	// Initialize context
 	ctx := context.Background()
@@ -33,19 +44,21 @@ func main() {
 		cfg.Keycloak.RedirectUri,
 	)
 	if err != nil {
-		log.Fatalf("Failed to create Keycloak client: %v", err)
+		slog.Error("Failed to create Keycloak client,", "error", err)
+		os.Exit(1)
 	}
-	log.Printf("Keycloak client initialized for realm: %s", cfg.Keycloak.Realm)
+	slog.Info("Keycloak client initialized for", "realm", cfg.Keycloak.Realm)
 
 	// Convert MaxAge from string to int
 	maxAge, err := strconv.Atoi(cfg.Session.MaxAge)
 	if err != nil {
-		log.Fatalf("Invalid session max_age: %v", err)
+		slog.Error("Invalid session max_age,", "error", err)
+		os.Exit(1)
 	}
 
 	// Initialize session store
 	sessionStore := session.NewStore(cfg.Session.Secret, maxAge)
-	log.Printf("Session store initialized with max age: %d seconds", maxAge)
+	slog.Info("Session store initialized with", "max_age", maxAge)
 
 	// Initialize auth handlers
 	authHandlers := auth.NewHandlers(
@@ -54,14 +67,18 @@ func main() {
 		cfg.Keycloak.Url,
 		cfg.Keycloak.Realm,
 	)
-	log.Println("Auth handlers initialized")
+	slog.Info("Auth handlers initialized")
 
-	// Initialize application service
+	orgService, err := services.NewOrganizationService(cfg.Organization.Name, cfg.Organization.HomeUrl, cfg.Organization.CustomDescription)
+	if err != nil {
+		slog.Error("Failed to create organization service,", "error", err)
+	}
+
 	appService, err := services.NewApplicationService(keycloakClient.AdminClient)
 	if err != nil {
-		log.Fatalf("Failed to create application service: %v", err)
+		slog.Error("Failed to create application service,", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Application service initialized")
 
 	// Create HTTP server
 	httpServer := server.HttpServer(
@@ -71,14 +88,16 @@ func main() {
 		keycloakClient,
 		authHandlers,
 		sessionStore,
+		orgService,
 		appService,
 	)
 
-	log.Printf("Starting server on %s", httpServer.Addr)
-	log.Printf("Keycloak URL: %s/realms/%s", cfg.Keycloak.Url, cfg.Keycloak.Realm)
-	log.Printf("Redirect URI: %s", cfg.Keycloak.RedirectUri)
+	slog.Info("Starting server,", "address", httpServer.Addr)
+	slog.Info("Keycloak", "URL", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
+	slog.Info("Redirect", "URI", cfg.Keycloak.RedirectUri)
 
 	if err := httpServer.ListenAndServe(); err != nil {
-		log.Fatal(err)
+		slog.Error("Starting server failed", "error", err)
+		os.Exit(1)
 	}
 }

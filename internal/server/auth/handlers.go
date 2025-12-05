@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
@@ -33,7 +33,7 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	// Generate state parameter for CSRF protection
 	state, err := generateState()
 	if err != nil {
-		log.Printf("Failed to generate state: %v", err)
+		slog.Error("Failed to generate state,", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -42,7 +42,7 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	sess, _ := h.sessionStore.Get(r, session.SessionName)
 	sess.Values["oauth_state"] = state
 	if err := sess.Save(r, w); err != nil {
-		log.Printf("Failed to save session: %v", err)
+		slog.Error("Failed to save session,", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -57,7 +57,7 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Verify state parameter
 	sess, err := h.sessionStore.Get(r, session.SessionName)
 	if err != nil {
-		log.Printf("Failed to get session: %v", err)
+		slog.Error("Failed to get session,", "error", err)
 		http.Error(w, "Invalid session", http.StatusBadRequest)
 		return
 	}
@@ -81,7 +81,7 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Check for error from Keycloak
 	if errorParam := r.URL.Query().Get("error"); errorParam != "" {
 		errorDesc := r.URL.Query().Get("error_description")
-		log.Printf("OAuth error: %s - %s", errorParam, errorDesc)
+		slog.Error("OAuth,", "error", errorParam, "description", errorDesc)
 		http.Error(w, fmt.Sprintf("Authentication failed: %s", errorDesc), http.StatusUnauthorized)
 		return
 	}
@@ -95,14 +95,14 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.keycloakClient.OAuth2Config.Exchange(r.Context(), code)
 	if err != nil {
-		log.Printf("Failed to exchange code for token: %v", err)
+		slog.Error("Failed to exchange code for token,", "error", err)
 		http.Error(w, "Failed to authenticate", http.StatusInternalServerError)
 		return
 	}
 
 	// Save token to session
 	if err := h.sessionStore.SaveToken(w, r, token); err != nil {
-		log.Printf("Failed to save token: %v", err)
+		slog.Error("Failed to save token,", "error", err)
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
 
 	// Clear session
 	if err := h.sessionStore.Clear(w, r); err != nil {
-		log.Printf("Failed to clear session: %v", err)
+		slog.Error("Failed to clear session,", "error", err)
 	}
 
 	// Build Keycloak logout URL

@@ -1,3 +1,7 @@
+organization:
+  name: "Biddly"
+#  custom_description: "Foo <b>Bar</b>"
+  
 keycloak:
   url: "http://localhost:8082"
   realm: "cloak-apps-realm"
@@ -9,6 +13,7 @@ server:
   port: 8080
 #  host: "localhost"
 #  timeout: 10
+  log_level: "DEBUG"
 
 session:
   secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"
