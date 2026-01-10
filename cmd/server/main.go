@@ -69,7 +69,11 @@ func main() {
 	)
 	slog.Info("Auth handlers initialized")
 
-	orgService, err := services.NewOrganizationService(cfg.Organization.Name, cfg.Organization.HomeUrl, cfg.Organization.CustomDescription)
+	orgService, err := services.NewOrganizationService(services.OsOptions{
+		Name:        cfg.Organization.Name,
+		HomeUrl:     cfg.Organization.HomeUrl,
+		Description: cfg.Organization.CustomDescription,
+	})
 	if err != nil {
 		slog.Error("Failed to create organization service,", "error", err)
 	}

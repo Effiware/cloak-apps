@@ -31,7 +31,7 @@ func NewHandlers(keycloakClient *keycloak.Client, sessionStore *session.Store, k
 // HandleLogin redirects to Keycloak login
 func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	// Generate state parameter for CSRF protection
-	state, err := generateState()
+	state, err := generateRandomState()
 	if err != nil {
 		slog.Error("Failed to generate state,", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -76,7 +76,9 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Clear state from session
 	delete(sess.Values, "oauth_state")
-	sess.Save(r, w)
+	if err := sess.Save(r, w); err != nil {
+		slog.Error("Saving session after deleting status failed,", "error", err)
+	}
 
 	// Check for error from Keycloak
 	if errorParam := r.URL.Query().Get("error"); errorParam != "" {
@@ -155,16 +157,11 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
-// generateState creates a random state string for CSRF protection
-func generateState() (string, error) {
+// generateRandomState creates a random state string for CSRF protection
+func generateRandomState() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-// Helper method to get session store (for use in routes if needed)
-func (h *Handlers) GetSessionStore() *session.Store {
-	return h.sessionStore
 }

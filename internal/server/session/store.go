@@ -27,6 +27,8 @@ func init() {
 	gob.Register(time.Time{})
 }
 
+// Store currently is implemented as a [FileSystemStore](https://pkg.go.dev/github.com/gorilla/sessions#FilesystemStore)
+// TODO: Consider using SQL/KV -based alternative
 type Store struct {
 	store  sessions.Store
 	maxAge int
@@ -51,7 +53,7 @@ func NewStore(secret string, maxAge int) *Store {
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
+		Secure:   false, // TODO: Set to true in production with HTTPS
 		SameSite: http.SameSiteLaxMode,
 	}
 
