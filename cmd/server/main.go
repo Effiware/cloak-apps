@@ -78,7 +78,7 @@ func main() {
 		slog.Error("Failed to create organization service,", "error", err)
 	}
 
-	appService, err := services.NewApplicationService(keycloakClient.AdminClient)
+	appService, err := services.NewApplicationService(keycloakClient.AdminClient, cfg.Keycloak.ClientId)
 	if err != nil {
 		slog.Error("Failed to create application service,", "error", err)
 		os.Exit(1)

@@ -12,14 +12,16 @@ import (
 )
 
 type ApplicationService struct {
-	adminClient  *keycloak.AdminClient
-	clientScopes map[string]string // Maps scope ID to scope name
+	adminClient       *keycloak.AdminClient
+	clientScopes      map[string]string // Maps scope ID to scope name
+	cloakAppsClientId string
 }
 
-func NewApplicationService(adminClient *keycloak.AdminClient) (*ApplicationService, error) {
+func NewApplicationService(adminClient *keycloak.AdminClient, cloakAppsClientId string) (*ApplicationService, error) {
 	service := &ApplicationService{
-		adminClient:  adminClient,
-		clientScopes: make(map[string]string),
+		adminClient:       adminClient,
+		clientScopes:      make(map[string]string),
+		cloakAppsClientId: cloakAppsClientId,
 	}
 
 	// Fetch and cache client scopes on initialization
@@ -158,7 +160,7 @@ func (as *ApplicationService) isInternalClient(clientID string) bool {
 		"broker",
 		"realm-management",
 		"security-admin-console",
-		"cloak-apps-portal", // Our portal client should not appear in the list
+		as.cloakAppsClientId, // Our portal client should not appear in the list
 	}
 
 	for _, internal := range internalClients {
