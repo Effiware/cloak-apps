@@ -36,11 +36,8 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 
 		// HDA routes
 		r.HandleFunc("/", hda.WithJsonFallback(hda.RenderRoot(hdaAndApi.orgService, hdaAndApi.appService)))
-		r.Post("/clicked", hda.WithJsonFallback(hda.RenderClick))
 
 		// API routes
-		r.Get("/api/v1/clicks", api.JsonHandler(api.GetClicks))
-		r.Post("/api/v1/clicks/increment", api.JsonHandler(api.IncrementClicks))
 		r.Get("/api/v1/organization", api.JsonHandler(api.GetOrganization(hdaAndApi.orgService)))
 		r.Get("/api/v1/applications", api.JsonHandler(api.GetApplications(hdaAndApi.appService)))
 	})

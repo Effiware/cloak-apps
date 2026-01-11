@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"strconv"
 
 	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/keycloak"
@@ -29,12 +28,9 @@ func main() {
 	} else {
 		slog.Error("Error while unmarshalling log level,", "error", err)
 	}
-	slog.Info("Initialized log", "level", level)
+	slog.Info("Initialized slog with", "level", level)
 
-	// Initialize context
 	ctx := context.Background()
-
-	// Initialize Keycloak client
 	keycloakClient, err := keycloak.NewClient(
 		ctx,
 		cfg.Keycloak.Url,
@@ -49,22 +45,10 @@ func main() {
 	}
 	slog.Info("Keycloak client initialized for", "realm", cfg.Keycloak.Realm)
 
-	// Convert MaxAge from string to int
-	maxAge, err := strconv.Atoi(cfg.Session.MaxAge)
-	if err != nil {
-		slog.Error("Invalid session max_age,", "error", err)
-		os.Exit(1)
-	}
+	sessionStore := session.NewStore(cfg.Session.Secret, cfg.Session.MaxAge, cfg.Session.Secure)
+	slog.Info("Session store initialized with", "max_age", cfg.Session.MaxAge, "secure", cfg.Session.Secure)
 
-	// Initialize session store
-	sessionStore := session.NewStore(cfg.Session.Secret, maxAge)
-	slog.Info("Session store initialized with", "max_age", maxAge)
-
-	// Initialize auth handlers
-	authHandlers := auth.NewHandlers(
-		keycloakClient,
-		sessionStore,
-	)
+	authHandlers := auth.NewHandlers(keycloakClient, sessionStore)
 	slog.Info("Auth handlers initialized")
 
 	orgService, err := services.NewOrganizationService(services.OsOptions{

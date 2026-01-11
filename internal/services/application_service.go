@@ -44,7 +44,6 @@ func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
 	}
 
 	slog.Debug("Loaded client scopes,", "total_number", len(as.clientScopes))
-	slog.Debug("Client scope", "mappings", as.clientScopes)
 	return nil
 }
 
@@ -101,9 +100,8 @@ func (as *ApplicationService) transformClientToApplication(client *keycloak.Clie
 	environment := as.extractScopeCategory(client.OptionalClientScopes, "env-")
 
 	// Debug logging for metadata extraction
-	slog.Debug("", "Client", client.ClientID, "OptionalClientScopes", client.OptionalClientScopes)
-	slog.Debug("", "Client", client.ClientID, "Space", space, "Environment", environment)
-	slog.Debug("", "Client", client.ClientID, "Attributes", client.Attributes)
+	slog.Debug("-->", "Client", client.ClientID, "OptionalClientScopes", client.OptionalClientScopes)
+	slog.Debug("-->", "Client", client.ClientID, "Space", space, "Environment", environment)
 
 	// Extract thumbnail URL from attributes
 	thumbnailURL := ""
@@ -111,8 +109,8 @@ func (as *ApplicationService) transformClientToApplication(client *keycloak.Clie
 		// Keycloak uses 'logoUri' not 'logoUrl'
 		thumbnailURL = client.Attributes["logoUri"]
 	}
-	slog.Debug("", "Client", client.ClientID, "ThumbnailURL", thumbnailURL)
-	slog.Debug("", "Client", client.ClientID, "SSOEnabled", metadata.SSOEnabled, "URL", client.BaseURL)
+	slog.Debug("-->", "Client", client.ClientID, "ThumbnailURL", thumbnailURL)
+	slog.Debug("-->", "Client", client.ClientID, "SSOEnabled", metadata.SSOEnabled, "URL", client.BaseURL)
 
 	return &models.Application{
 		ID:           client.ID,

@@ -23,29 +23,6 @@ paths:
       summary: List assigned applications
       tags:
       - applications
-  /clicks:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve the total number of clicks recorded in the system
-      produces:
-      - application/json
-      responses: {}
-      summary: Get the number of clicks
-      tags:
-      - clicks
-  /clicks/increment:
-    post:
-      consumes:
-      - application/json
-      description: Increment the total number of clicks recorded in the system by
-        one
-      produces:
-      - application/json
-      responses: {}
-      summary: Increment the number of clicks
-      tags:
-      - clicks
   /organization:
     get:
       consumes:

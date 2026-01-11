@@ -17,4 +17,6 @@ server:
 
 session:
   secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"
-  max_age: 3600  # 1 hour
+  max_age: 3600  # 1 hour by default
+#  secure: false  # needed on local environment or when no HTTPS enabled
+

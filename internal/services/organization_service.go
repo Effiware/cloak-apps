@@ -51,7 +51,7 @@ func (os *OrganizationService) canonicalizeHTML(in string) (string, error) {
 		prev = in
 
 		if count > 10 {
-			return "", fmt.Errorf("could't canonicalize description - too many escape layers")
+			return "", fmt.Errorf("couldn't canonicalize description - too many escape layers")
 		}
 		if in, err = url.QueryUnescape(in); err != nil {
 			return "", err

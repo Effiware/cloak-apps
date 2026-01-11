@@ -5,13 +5,18 @@ import (
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/server/middleware"
-	"github.com/effiware/cloak-apps/internal/server/models"
 	"github.com/effiware/cloak-apps/internal/services"
 	views "github.com/effiware/cloak-apps/internal/views"
-	components "github.com/effiware/cloak-apps/internal/views/components"
 )
 
-var clicks *models.Clicks = models.ClicksStore
+// UnauthorizedError represents an authentication error
+type UnauthorizedError struct {
+	Message string
+}
+
+func (e *UnauthorizedError) Error() string {
+	return e.Message
+}
 
 func RenderRoot(orgService *services.OrganizationService, appService *services.ApplicationService) ViewHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) error {
@@ -40,19 +45,4 @@ func RenderRoot(orgService *services.OrganizationService, appService *services.A
 		template := views.Index(userInfo, organization, applications)
 		return template.Render(r.Context(), w)
 	}
-}
-
-func RenderClick(w http.ResponseWriter, r *http.Request) error {
-	clicks.Increment()
-	template := components.Click()
-	return template.Render(r.Context(), w)
-}
-
-// UnauthorizedError represents an authentication error
-type UnauthorizedError struct {
-	Message string
-}
-
-func (e *UnauthorizedError) Error() string {
-	return e.Message
 }

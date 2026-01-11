@@ -14,6 +14,7 @@ import (
 const SessionName = "cloak-apps-session"
 
 const (
+	sessionDir      = "/tmp/sessions" // TODO: Temporary solution to have things cleaned by OS
 	keyAccessToken  = "access_token"
 	keyTokenType    = "token_type"
 	keyRefreshToken = "refresh_token"
@@ -34,11 +35,7 @@ type Store struct {
 	maxAge int
 }
 
-func NewStore(secret string, maxAge int) *Store {
-	// Use FilesystemStore instead of CookieStore to avoid size limits
-	// Sessions are stored server-side in /tmp/sessions directory
-	sessionDir := "/tmp/sessions"
-
+func NewStore(secret string, maxAge int, secure bool) *Store {
 	// Create session directory if it doesn't exist
 	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		slog.Error("Failed to create session directory,", "error", err)
@@ -53,7 +50,7 @@ func NewStore(secret string, maxAge int) *Store {
 		Path:     "/",
 		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   false, // TODO: Set to true in production with HTTPS
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 	}
 

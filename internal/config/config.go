@@ -26,7 +26,8 @@ type Config struct {
 
 	Session struct {
 		Secret string `mapstructure:"secret"`
-		MaxAge string `mapstructure:"max_age"`
+		MaxAge int    `mapstructure:"max_age"`
+		Secure bool   `mapstructure:"secure"`
 	} `mapstructure:"session"`
 
 	Organization struct {
@@ -45,7 +46,11 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.timeout", 10)
-	viper.SetDefault("server.log_level", "DEBUG")
+	viper.SetDefault("server.log_level", "INFO")
+	viper.SetDefault("session.max_age", 3600)
+	viper.SetDefault("session.secure", true)
+	viper.SetDefault("organization.name", "Effiware")
+	viper.SetDefault("organization.home_url", "https://effiware.com")
 
 	// env overrides
 	viper.SetEnvPrefix("CLOAKAPPS")
@@ -76,7 +81,6 @@ func (c *Config) Validate() error {
 	if c.Server.Timeout < 0 {
 		return fmt.Errorf("server.timeout must be positive")
 	}
-
 	if c.Keycloak.Url == "" {
 		return fmt.Errorf("keycloak.url is required")
 	}
@@ -85,6 +89,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Keycloak.Realm == "" {
 		return fmt.Errorf("keycloak.realm is required")
+	}
+	if c.Session.Secret == "" || len(c.Session.Secret) < 32 {
+		return fmt.Errorf("session.secret must have min length of 32 chars to work properly")
+	}
+	if c.Session.MaxAge < 0 {
+		return fmt.Errorf("session.max_age must be positive")
 	}
 
 	return nil

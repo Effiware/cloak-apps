@@ -36,38 +36,6 @@
                 "responses": {}
             }
         },
-        "/clicks": {
-            "get": {
-                "description": "Retrieve the total number of clicks recorded in the system",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "clicks"
-                ],
-                "summary": "Get the number of clicks",
-                "responses": {}
-            }
-        },
-        "/clicks/increment": {
-            "post": {
-                "description": "Increment the total number of clicks recorded in the system by one",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "clicks"
-                ],
-                "summary": "Increment the number of clicks",
-                "responses": {}
-            }
-        },
         "/organization": {
             "get": {
                 "consumes": [
