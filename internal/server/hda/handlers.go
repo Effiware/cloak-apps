@@ -14,7 +14,7 @@ func WithJsonFallback(viewHandler ViewHandlerT) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := viewHandler(w, r)
 		if err != nil {
-			slog.Error("ViewHandler, ", "error", err)
+			slog.Error("ViewHandler reported problem,", "error", err)
 			if clientErr, ok := err.(*http_errors.ClientErr); ok {
 				JsonHandler(w, clientErr.HttpCode, clientErr)
 			} else {

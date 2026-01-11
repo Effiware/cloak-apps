@@ -25,6 +25,7 @@ func RenderRoot(orgService *services.OrganizationService, appService *services.A
 		organization, err := orgService.GetOrganization()
 		if err != nil {
 			slog.Error("Failed to load organization,", "error", err)
+			return err
 		}
 
 		applications, err := appService.GetApplicationsForUser(r.Context(), userInfo)

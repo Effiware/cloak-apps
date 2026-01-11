@@ -19,14 +19,14 @@ type OsOptions struct {
 func NewOrganizationService(options OsOptions) (*OrganizationService, error) {
 	os := &OrganizationService{}
 
-	canonicalized, err := os.canonicalizeHtml(options.Description)
+	canonicalized, err := os.canonicalizeHTML(options.Description)
 	if err != nil {
 		return nil, err
 	}
 
 	os.Name = options.Name
 	os.HomeUrl = options.HomeUrl
-	os.CustomDescription = os.saniziteHtml(canonicalized)
+	os.CustomDescription = os.sanitizeHTML(canonicalized)
 
 	return os, nil
 }
@@ -35,14 +35,14 @@ func (os *OrganizationService) GetOrganization() (models.Organization, error) {
 	return models.Organization(*os), nil
 }
 
-// saniziteHtml ensures that the text is plain and free from any HTML or script tags
-func (os *OrganizationService) saniziteHtml(in string) string {
+// sanitizeHTML ensures that the text is plain and free from any HTML or script tags
+func (os *OrganizationService) sanitizeHTML(in string) string {
 	policy := bluemonday.StrictPolicy()
 	return policy.Sanitize(in)
 }
 
-// canonicalizeHtml decodes HTML repeatedly until no encoding tokens remain
-func (os *OrganizationService) canonicalizeHtml(in string) (string, error) {
+// canonicalizeHTML decodes HTML repeatedly until no encoding tokens remain
+func (os *OrganizationService) canonicalizeHTML(in string) (string, error) {
 	var err error
 	var prev string
 	var count int

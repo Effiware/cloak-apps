@@ -15,16 +15,12 @@ import (
 type Handlers struct {
 	keycloakClient *keycloak.Client
 	sessionStore   *session.Store
-	keycloakURL    string
-	realm          string
 }
 
-func NewHandlers(keycloakClient *keycloak.Client, sessionStore *session.Store, keycloakURL, realm string) *Handlers {
+func NewHandlers(keycloakClient *keycloak.Client, sessionStore *session.Store) *Handlers {
 	return &Handlers{
 		keycloakClient: keycloakClient,
 		sessionStore:   sessionStore,
-		keycloakURL:    keycloakURL,
-		realm:          realm,
 	}
 }
 
@@ -64,12 +60,14 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	savedState, ok := sess.Values["oauth_state"].(string)
 	if !ok || savedState == "" {
+		slog.Error("Failed to get saved state")
 		http.Error(w, "Missing state", http.StatusBadRequest)
 		return
 	}
 
 	receivedState := r.URL.Query().Get("state")
 	if receivedState != savedState {
+		slog.Error("Received state doesn't match saved state")
 		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
@@ -77,7 +75,9 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Clear state from session
 	delete(sess.Values, "oauth_state")
 	if err := sess.Save(r, w); err != nil {
-		slog.Error("Saving session after deleting status failed,", "error", err)
+		slog.Error("Failed to save state after deletion,", "error", err)
+		http.Error(w, "Failed to save state after deletion", http.StatusBadRequest)
+		return
 	}
 
 	// Check for error from Keycloak
@@ -115,16 +115,15 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 // HandleLogout clears session and redirects to Keycloak logout
 func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
-	// Get current token for logout redirect
 	token, _ := h.sessionStore.GetToken(r)
 
-	// Clear session
 	if err := h.sessionStore.Clear(w, r); err != nil {
 		slog.Error("Failed to clear session,", "error", err)
+		http.Error(w, "Failed to clear session,", http.StatusBadRequest)
+		return
 	}
 
-	// Build Keycloak logout URL
-	logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", h.keycloakURL, h.realm)
+	logoutURL := fmt.Sprintf("%s/protocol/openid-connect/logout", h.keycloakClient.IssuerURL)
 
 	// Add post_logout_redirect_uri if we have an ID token
 	if token != nil {
@@ -151,8 +150,8 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 
 	// Build Keycloak authorization URL for the specific client
 	// This will redirect user to the target application after Keycloak authentication
-	authURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth?client_id=%s&response_type=code",
-		h.keycloakURL, h.realm, clientID)
+	authURL := fmt.Sprintf("%s/protocol/openid-connect/auth?client_id=%s&response_type=code",
+		h.keycloakClient.IssuerURL, clientID)
 
 	http.Redirect(w, r, authURL, http.StatusFound)
 }

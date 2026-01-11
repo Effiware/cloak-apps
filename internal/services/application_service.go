@@ -54,13 +54,9 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 	if err != nil {
 		return nil, fmt.Errorf("failed to get clients: %w", err)
 	}
-
-	// Debug logging for application discovery
 	slog.Debug("Fetching applications for", "user", userInfo.PreferredUsername, "roles", userInfo.ClientRoles)
-	slog.Debug("Total clients length from Keycloak: ", "length", len(clients))
 
 	var applications []models.Application
-
 	for _, client := range clients {
 		// Skip internal Keycloak clients (realm-management, account, etc.)
 		if as.isInternalClient(client.ClientID) {

@@ -9,6 +9,7 @@ import (
 )
 
 type Client struct {
+	IssuerURL    string
 	Provider     *oidc.Provider
 	OAuth2Config *oauth2.Config
 	AdminClient  *AdminClient
@@ -16,7 +17,6 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, keycloakURL, realm, clientID, clientSecret, redirectURI string) (*Client, error) {
-	// Build issuer URL
 	issuerURL := fmt.Sprintf("%s/realms/%s", keycloakURL, realm)
 
 	// Initialize OIDC provider
@@ -41,6 +41,7 @@ func NewClient(ctx context.Context, keycloakURL, realm, clientID, clientSecret, 
 	adminClient := NewAdminClient(keycloakURL, realm, clientID, clientSecret)
 
 	return &Client{
+		IssuerURL:    issuerURL,
 		Provider:     provider,
 		OAuth2Config: oauth2Config,
 		AdminClient:  adminClient,

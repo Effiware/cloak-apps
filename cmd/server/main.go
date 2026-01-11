@@ -64,8 +64,6 @@ func main() {
 	authHandlers := auth.NewHandlers(
 		keycloakClient,
 		sessionStore,
-		cfg.Keycloak.Url,
-		cfg.Keycloak.Realm,
 	)
 	slog.Info("Auth handlers initialized")
 
@@ -76,6 +74,7 @@ func main() {
 	})
 	if err != nil {
 		slog.Error("Failed to create organization service,", "error", err)
+		os.Exit(1)
 	}
 
 	appService, err := services.NewApplicationService(keycloakClient.AdminClient, cfg.Keycloak.ClientId)
