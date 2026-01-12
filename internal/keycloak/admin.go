@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
+
+const tokenExpiryBuffer = 30 * time.Second
 
 type AdminClient struct {
 	BaseURL      string
@@ -19,6 +22,8 @@ type AdminClient struct {
 	ClientSecret string
 	httpClient   *http.Client
 	token        *TokenResponse
+	tokenExpiry  time.Time
+	tokenMutex   sync.Mutex
 }
 
 type TokenResponse struct {
@@ -103,14 +108,37 @@ func (ac *AdminClient) GetServiceAccountToken(ctx context.Context) error {
 	}
 
 	ac.token = &tokenResp
+	// Store token expiry time for proactive refresh
+	ac.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+
+	slog.Debug("Service account token obtained",
+		"expires_in", tokenResp.ExpiresIn,
+		"expires_at", ac.tokenExpiry.Format(time.RFC3339))
+
+	return nil
+}
+
+// ensureValidToken (thread-safe) checks if the current token is valid and refreshes it if needed
+func (ac *AdminClient) ensureValidToken(ctx context.Context) error {
+	ac.tokenMutex.Lock()
+	defer ac.tokenMutex.Unlock()
+
+	// Check if token is nil or expired (with safety buffer)
+	if ac.token == nil || time.Now().Add(tokenExpiryBuffer).After(ac.tokenExpiry) {
+		if ac.token != nil {
+			slog.Debug("Token expired or expiring soon, proactively refreshing",
+				"expires_at", ac.tokenExpiry.Format(time.RFC3339),
+				"time_until_expiry", time.Until(ac.tokenExpiry))
+		}
+		return ac.GetServiceAccountToken(ctx)
+	}
+
 	return nil
 }
 
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
-	if ac.token == nil {
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			return nil, err
-		}
+	if err := ac.ensureValidToken(ctx); err != nil {
+		return nil, err
 	}
 
 	clientsURL := fmt.Sprintf("%s/admin/realms/%s/clients", ac.BaseURL, ac.Realm)
@@ -129,12 +157,16 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 	}
 	defer resp.Body.Close()
 
-	// If we get 401, token expired - refresh and retry once
+	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
 	if resp.StatusCode == http.StatusUnauthorized {
-		slog.Debug("Admin API token expired, refreshing...")
+		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
+
+		ac.tokenMutex.Lock()
 		if err := ac.GetServiceAccountToken(ctx); err != nil {
+			ac.tokenMutex.Unlock()
 			return nil, fmt.Errorf("failed to refresh token: %w", err)
 		}
+		ac.tokenMutex.Unlock()
 
 		// Retry the request with new token
 		req, err = http.NewRequestWithContext(ctx, "GET", clientsURL, nil)
@@ -165,10 +197,8 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 }
 
 func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepresentation, error) {
-	if ac.token == nil {
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			return nil, err
-		}
+	if err := ac.ensureValidToken(ctx); err != nil {
+		return nil, err
 	}
 
 	scopesURL := fmt.Sprintf("%s/admin/realms/%s/client-scopes", ac.BaseURL, ac.Realm)
@@ -187,6 +217,32 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 	}
 	defer resp.Body.Close()
 
+	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
+	if resp.StatusCode == http.StatusUnauthorized {
+		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
+
+		ac.tokenMutex.Lock()
+		if err := ac.GetServiceAccountToken(ctx); err != nil {
+			ac.tokenMutex.Unlock()
+			return nil, fmt.Errorf("failed to refresh token: %w", err)
+		}
+		ac.tokenMutex.Unlock()
+
+		// Retry the request with new token
+		req, err = http.NewRequestWithContext(ctx, "GET", scopesURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create retry request: %w", err)
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = ac.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retry client scopes request: %w", err)
+		}
+		defer resp.Body.Close()
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("client scopes request failed with status %d: %s", resp.StatusCode, string(body))
@@ -201,10 +257,8 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 }
 
 func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([]RoleRepresentation, error) {
-	if ac.token == nil {
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			return nil, err
-		}
+	if err := ac.ensureValidToken(ctx); err != nil {
+		return nil, err
 	}
 
 	rolesURL := fmt.Sprintf("%s/admin/realms/%s/clients/%s/roles", ac.BaseURL, ac.Realm, clientUUID)
@@ -222,6 +276,32 @@ func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([
 		return nil, fmt.Errorf("failed to get client roles: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
+	if resp.StatusCode == http.StatusUnauthorized {
+		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
+
+		ac.tokenMutex.Lock()
+		if err := ac.GetServiceAccountToken(ctx); err != nil {
+			ac.tokenMutex.Unlock()
+			return nil, fmt.Errorf("failed to refresh token: %w", err)
+		}
+		ac.tokenMutex.Unlock()
+
+		// Retry the request with new token
+		req, err = http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create retry request: %w", err)
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err = ac.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retry client roles request: %w", err)
+		}
+		defer resp.Body.Close()
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -244,13 +324,12 @@ func ParseDescriptionJSON(description string) (*DescriptionMetadata, error) {
 		}, nil
 	}
 
-	// Try to parse as JSON
 	var metadata DescriptionMetadata
 	if err := json.Unmarshal([]byte(description), &metadata); err != nil {
-		// If JSON parsing fails, treat as plain text
+		// If JSON parsing fails, treat as plain text (with SSO disabled)
 		return &DescriptionMetadata{
 			Text:       description,
-			SSOEnabled: false, // Default to no SSO for plain text
+			SSOEnabled: false,
 		}, nil
 	}
 

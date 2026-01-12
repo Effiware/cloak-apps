@@ -14,12 +14,13 @@ import (
 const SessionName = "cloak-apps-session"
 
 const (
-	sessionDir      = "/tmp/sessions" // TODO: Temporary solution to have things cleaned by OS
-	keyAccessToken  = "access_token"
-	keyTokenType    = "token_type"
-	keyRefreshToken = "refresh_token"
-	keyExpiry       = "expiry"
-	keyIDToken      = "id_token"
+	sessionDir       = "/tmp/sessions" // TODO: Temporary solution to have things cleaned by OS
+	sessionMaxLength = 8192
+	keyAccessToken   = "access_token"
+	keyTokenType     = "token_type"
+	keyRefreshToken  = "refresh_token"
+	keyExpiry        = "expiry"
+	keyIDToken       = "id_token"
 )
 
 func init() {
@@ -36,16 +37,14 @@ type Store struct {
 }
 
 func NewStore(secret string, maxAge int, secure bool) *Store {
-	// Create session directory if it doesn't exist
 	if err := os.MkdirAll(sessionDir, 0700); err != nil {
 		slog.Error("Failed to create session directory,", "error", err)
 		os.Exit(1)
 	}
 
 	store := sessions.NewFilesystemStore(sessionDir, []byte(secret))
-	// Increase MaxLength to allow larger session data in cookies
 	// Even with FilesystemStore, the session ID and metadata are stored in cookies
-	store.MaxLength(8192)
+	store.MaxLength(sessionMaxLength)
 	store.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   maxAge,
@@ -66,7 +65,6 @@ func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.
 		return err
 	}
 
-	// Store token components
 	session.Values[keyAccessToken] = token.AccessToken
 	session.Values[keyTokenType] = token.TokenType
 	session.Values[keyRefreshToken] = token.RefreshToken
@@ -86,7 +84,6 @@ func (s *Store) GetToken(r *http.Request) (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	// Check if token exists
 	accessToken, ok := session.Values[keyAccessToken].(string)
 	if !ok || accessToken == "" {
 		return nil, nil
@@ -125,9 +122,8 @@ func (s *Store) Clear(w http.ResponseWriter, r *http.Request) error {
 		session, _ = s.store.New(r, SessionName)
 	}
 
-	// Clear all values
-	session.Values = make(map[interface{}]interface{})
-	session.Options.MaxAge = -1 // Delete cookie
+	session.Values = make(map[interface{}]interface{}) // Clear all values
+	session.Options.MaxAge = -1                        // Delete cookie
 
 	return session.Save(r, w)
 }

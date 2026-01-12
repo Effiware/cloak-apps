@@ -28,11 +28,13 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r.Get("/auth/login", hdaAndApi.authHandlers.HandleLogin)
 	r.Get("/auth/callback", hdaAndApi.authHandlers.HandleCallback)
 	r.Get("/auth/logout", hdaAndApi.authHandlers.HandleLogout)
-	r.Get("/auth/sso-redirect", hdaAndApi.authHandlers.HandleSSORedirect)
 
 	// Protected routes (require authentication)
 	r.Group(func(r chi.Router) {
 		r.Use(authmw.AuthRequired(hdaAndApi.keycloakClient, hdaAndApi.sessionStore))
+
+		// Auth routes (protected)
+		r.Get("/auth/sso-redirect", hdaAndApi.authHandlers.HandleSSORedirect)
 
 		// HDA routes
 		r.HandleFunc("/", hda.WithJsonFallback(hda.RenderRoot(hdaAndApi.orgService, hdaAndApi.appService)))

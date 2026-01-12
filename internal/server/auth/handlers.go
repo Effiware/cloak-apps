@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
+	"github.com/effiware/cloak-apps/internal/server/middleware"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"golang.org/x/oauth2"
 )
@@ -102,14 +103,12 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save token to session
 	if err := h.sessionStore.SaveToken(w, r, token); err != nil {
 		slog.Error("Failed to save token,", "error", err)
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
 
-	// Redirect to home page
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -128,7 +127,6 @@ func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	// Add post_logout_redirect_uri if we have an ID token
 	if token != nil {
 		if idToken, ok := token.Extra("id_token").(string); ok && idToken != "" {
-			// Redirect back to home page after logout
 			redirectURI := h.keycloakClient.OAuth2Config.RedirectURL
 			// Extract base URL from redirect URI (remove /auth/callback)
 			baseURL := redirectURI[:len(redirectURI)-len("/auth/callback")]
@@ -142,16 +140,57 @@ func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
 
 // HandleSSORedirect redirects user to specific client's SSO login
 func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
+	// Get authenticated user from context (guaranteed to exist due to AuthRequired middleware)
+	userInfo, ok := middleware.GetUserFromContext(r.Context())
+	if !ok {
+		slog.Error("User context not found in SSO redirect")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	clientID := r.URL.Query().Get("client")
 	if clientID == "" {
+		slog.Error("Missing client parameter")
 		http.Error(w, "Missing client parameter", http.StatusBadRequest)
 		return
 	}
 
+	// Security: Validate that the user has access to this client
+	userRoles, hasAccess := userInfo.ClientRoles[clientID]
+	if !hasAccess || len(userRoles) == 0 {
+		slog.Warn("SSO redirect denied - user has no access to client",
+			"user", userInfo.PreferredUsername,
+			"client", clientID)
+		http.Error(w, "Access denied to the requested application", http.StatusForbidden)
+		return
+	}
+
+	// CSRF Protection: Generate state parameter
+	state, err := generateRandomState()
+	if err != nil {
+		slog.Error("Failed to generate state for SSO redirect,", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Store state in session for CSRF protection
+	sess, _ := h.sessionStore.Get(r, session.SessionName)
+	sess.Values["sso_state"] = state
+	sess.Values["sso_target_client"] = clientID
+	if err := sess.Save(r, w); err != nil {
+		slog.Error("Failed to save SSO session state,", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	// Build Keycloak authorization URL for the specific client
-	// This will redirect user to the target application after Keycloak authentication
-	authURL := fmt.Sprintf("%s/protocol/openid-connect/auth?client_id=%s&response_type=code",
-		h.keycloakClient.IssuerURL, clientID)
+	authURL := fmt.Sprintf("%s/protocol/openid-connect/auth?client_id=%s&response_type=code&state=%s",
+		h.keycloakClient.IssuerURL, clientID, state)
+
+	slog.Debug("SSO redirect granted",
+		"user", userInfo.PreferredUsername,
+		"client", clientID,
+		"roles", userRoles)
 
 	http.Redirect(w, r, authURL, http.StatusFound)
 }

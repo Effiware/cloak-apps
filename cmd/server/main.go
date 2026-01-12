@@ -14,7 +14,6 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("Failed to load configuration file,", "error", err)
