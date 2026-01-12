@@ -11,9 +11,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/effiware/cloak-apps/utils"
+	"golang.org/x/sync/singleflight"
 )
 
-const tokenExpiryBuffer = 30 * time.Second
+const (
+	tokenExpiryBuffer             = 30 * time.Second
+	tokenRefreshSingleflightGroup = "refresh_token"
+)
 
 type AdminClient struct {
 	BaseURL      string
@@ -23,7 +29,8 @@ type AdminClient struct {
 	httpClient   *http.Client
 	token        *TokenResponse
 	tokenExpiry  time.Time
-	tokenMutex   sync.Mutex
+	tokenMutex   sync.RWMutex
+	tokenGroup   singleflight.Group
 }
 
 type TokenResponse struct {
@@ -76,7 +83,32 @@ func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient 
 	}
 }
 
-func (ac *AdminClient) GetServiceAccountToken(ctx context.Context) error {
+// setTokenAndExpiry is a helper function to set new token and tokenExpiry in a thread-safe manner
+func (ac *AdminClient) setTokenAndExpiry(ctx context.Context, tr *TokenResponse, te time.Time) {
+	// TODO: Retrieve OTel span from context
+	ac.tokenMutex.Lock()
+	defer ac.tokenMutex.Unlock()
+	ac.token = tr
+	ac.tokenExpiry = te
+}
+
+// getToken is a helper function to obtain current token in a thread-safe manner
+func (ac *AdminClient) getToken(ctx context.Context) *TokenResponse {
+	// TODO: Retrieve OTel span from context
+	ac.tokenMutex.RLock()
+	defer ac.tokenMutex.RUnlock()
+	return ac.token
+}
+
+// getTokenAndTokenExpiry is a helper function to obtain current token and tokenExpiry in a thread-safe manner
+func (ac *AdminClient) getTokenAndTokenExpiry(ctx context.Context) (*TokenResponse, time.Time) {
+	// TODO: Retrieve OTel span from context
+	ac.tokenMutex.RLock()
+	defer ac.tokenMutex.RUnlock()
+	return ac.token, ac.tokenExpiry
+}
+
+func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", ac.BaseURL, ac.Realm)
 
 	data := url.Values{}
@@ -107,40 +139,45 @@ func (ac *AdminClient) GetServiceAccountToken(ctx context.Context) error {
 		return fmt.Errorf("failed to decode token response: %w", err)
 	}
 
-	ac.token = &tokenResp
-	// Store token expiry time for proactive refresh
-	ac.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-
-	slog.Debug("Service account token obtained",
-		"expires_in", tokenResp.ExpiresIn,
-		"expires_at", ac.tokenExpiry.Format(time.RFC3339))
+	ac.setTokenAndExpiry(ctx, &tokenResp, time.Now().Add(time.Duration(tokenResp.ExpiresIn)*time.Second))
+	slog.Debug("Service account token obtained", "expires_in", tokenResp.ExpiresIn)
 
 	return nil
 }
 
-// ensureValidToken (thread-safe) checks if the current token is valid and refreshes it if needed
+// ensureValidToken checks if the current token is valid and refreshes it if needed
 func (ac *AdminClient) ensureValidToken(ctx context.Context) error {
-	ac.tokenMutex.Lock()
-	defer ac.tokenMutex.Unlock()
+	token, tokenExpiry := ac.getTokenAndTokenExpiry(ctx)
 
 	// Check if token is nil or expired (with safety buffer)
-	if ac.token == nil || time.Now().Add(tokenExpiryBuffer).After(ac.tokenExpiry) {
-		if ac.token != nil {
+	if token == nil || time.Now().Add(tokenExpiryBuffer).After(tokenExpiry) {
+		if token != nil {
 			slog.Debug("Token expired or expiring soon, proactively refreshing",
-				"expires_at", ac.tokenExpiry.Format(time.RFC3339),
-				"time_until_expiry", time.Until(ac.tokenExpiry))
+				"expires_at", tokenExpiry.Format(time.RFC3339),
+				"time_until_expiry", time.Until(tokenExpiry))
 		}
-		return ac.GetServiceAccountToken(ctx)
+
+		// Use singleflight to ensure only one refresh happens
+		_, err, _ := ac.tokenGroup.Do(tokenRefreshSingleflightGroup, func() (interface{}, error) {
+			return nil, ac.getServiceAccountToken(ctx)
+		})
+		return err
 	}
+
+	return nil
+}
+
+func (ac *AdminClient) setFreshBearerToken(ctx context.Context, req *http.Request) error {
+	if err := ac.ensureValidToken(ctx); err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.getToken(ctx).AccessToken))
 
 	return nil
 }
 
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
-	if err := ac.ensureValidToken(ctx); err != nil {
-		return nil, err
-	}
-
 	clientsURL := fmt.Sprintf("%s/admin/realms/%s/clients", ac.BaseURL, ac.Realm)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", clientsURL, nil)
@@ -148,48 +185,15 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 		return nil, fmt.Errorf("failed to create clients request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := ac.httpClient.Do(req)
+	body, err := utils.SendRetryableRequest(
+		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get clients: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
-	if resp.StatusCode == http.StatusUnauthorized {
-		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
-
-		ac.tokenMutex.Lock()
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			ac.tokenMutex.Unlock()
-			return nil, fmt.Errorf("failed to refresh token: %w", err)
-		}
-		ac.tokenMutex.Unlock()
-
-		// Retry the request with new token
-		req, err = http.NewRequestWithContext(ctx, "GET", clientsURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create retry request: %w", err)
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err = ac.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to retry clients request: %w", err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("clients request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, err
 	}
 
 	var clients []ClientRepresentation
-	if err := json.NewDecoder(resp.Body).Decode(&clients); err != nil {
+	if err := json.Unmarshal(body, &clients); err != nil {
 		return nil, fmt.Errorf("failed to decode clients response: %w", err)
 	}
 
@@ -197,10 +201,6 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 }
 
 func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepresentation, error) {
-	if err := ac.ensureValidToken(ctx); err != nil {
-		return nil, err
-	}
-
 	scopesURL := fmt.Sprintf("%s/admin/realms/%s/client-scopes", ac.BaseURL, ac.Realm)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", scopesURL, nil)
@@ -208,48 +208,15 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 		return nil, fmt.Errorf("failed to create client scopes request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := ac.httpClient.Do(req)
+	body, err := utils.SendRetryableRequest(
+		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client scopes: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
-	if resp.StatusCode == http.StatusUnauthorized {
-		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
-
-		ac.tokenMutex.Lock()
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			ac.tokenMutex.Unlock()
-			return nil, fmt.Errorf("failed to refresh token: %w", err)
-		}
-		ac.tokenMutex.Unlock()
-
-		// Retry the request with new token
-		req, err = http.NewRequestWithContext(ctx, "GET", scopesURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create retry request: %w", err)
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err = ac.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to retry client scopes request: %w", err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("client scopes request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, err
 	}
 
 	var scopes []ClientScopeRepresentation
-	if err := json.NewDecoder(resp.Body).Decode(&scopes); err != nil {
+	if err := json.Unmarshal(body, &scopes); err != nil {
 		return nil, fmt.Errorf("failed to decode client scopes response: %w", err)
 	}
 
@@ -257,10 +224,6 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 }
 
 func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([]RoleRepresentation, error) {
-	if err := ac.ensureValidToken(ctx); err != nil {
-		return nil, err
-	}
-
 	rolesURL := fmt.Sprintf("%s/admin/realms/%s/clients/%s/roles", ac.BaseURL, ac.Realm, clientUUID)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
@@ -268,48 +231,15 @@ func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([
 		return nil, fmt.Errorf("failed to create client roles request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := ac.httpClient.Do(req)
+	body, err := utils.SendRetryableRequest(
+		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client roles: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Fallback: If we still get 401 (e.g., clock skew, manual revocation), retry once
-	if resp.StatusCode == http.StatusUnauthorized {
-		slog.Warn("Token unexpectedly invalid despite proactive refresh, forcing refresh")
-
-		ac.tokenMutex.Lock()
-		if err := ac.GetServiceAccountToken(ctx); err != nil {
-			ac.tokenMutex.Unlock()
-			return nil, fmt.Errorf("failed to refresh token: %w", err)
-		}
-		ac.tokenMutex.Unlock()
-
-		// Retry the request with new token
-		req, err = http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create retry request: %w", err)
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ac.token.AccessToken))
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err = ac.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to retry client roles request: %w", err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("client roles request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, err
 	}
 
 	var roles []RoleRepresentation
-	if err := json.NewDecoder(resp.Body).Decode(&roles); err != nil {
+	if err := json.Unmarshal(body, &roles); err != nil {
 		return nil, fmt.Errorf("failed to decode client roles response: %w", err)
 	}
 
