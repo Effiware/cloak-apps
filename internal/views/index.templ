@@ -1,7 +1,7 @@
 package views
 
 import (
-	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
 	"strings"
 )
@@ -29,7 +29,7 @@ func groupBySpace(apps []models.Application) map[string][]models.Application {
 	return grouped
 }
 
-templ Index(userInfo *middleware.UserInfo, organization models.Organization, applications []models.Application) {
+templ Index(userInfo *middlewares.UserInfo, organization models.Organization, applications []models.Application) {
     <html lang="en" class="dark">
         <head>
             <meta charset="UTF-8"/>

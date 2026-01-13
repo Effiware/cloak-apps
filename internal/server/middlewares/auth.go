@@ -34,16 +34,32 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return
 			} else if token == nil {
-				slog.Info("Token not present in the session store, redirecting to the login page")
+				slog.Info("Token not present in the session store, redirecting to login page")
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return
 			}
 
 			if !token.Valid() {
-				slog.Warn("Token not valid (e.g. stale one), redirecting to the login page")
-				sessionStore.Clear(w, r)
-				http.Redirect(w, r, "/auth/login", http.StatusFound)
-				return
+				slog.Info("Token expired, refreshing using refresh_token")
+
+				tokenSource := keycloakClient.OAuth2Config.TokenSource(r.Context(), token)
+				newToken, err := tokenSource.Token()
+				if err != nil {
+					slog.Warn("Token refresh failed, redirecting to login page", "error", err)
+					sessionStore.Clear(w, r)
+					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					return
+				}
+
+				if err := sessionStore.SaveToken(w, r, newToken); err != nil {
+					slog.Error("Failed to save refreshed token to session", "error", err)
+					sessionStore.Clear(w, r)
+					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					return
+				}
+
+				slog.Debug("Token successfully refreshed")
+				token = newToken
 			}
 
 			// Get ID token from oauth2 token
@@ -58,7 +74,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 			// Verify ID token
 			idToken, err := keycloakClient.Verifier.Verify(r.Context(), rawIDToken)
 			if err != nil {
-				slog.Error("Invalid token, redirecting to the login page")
+				slog.Error("Invalid token, redirecting to login page")
 				sessionStore.Clear(w, r)
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return
