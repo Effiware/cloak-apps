@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middleware"
@@ -12,22 +13,26 @@ import (
 )
 
 type ApplicationService struct {
+	done              chan struct{}
 	adminClient       *keycloak.AdminClient
 	clientScopes      map[string]string // Maps scope ID to scope name
 	cloakAppsClientId string
+	refreshTicker     *time.Ticker
 }
 
-func NewApplicationService(adminClient *keycloak.AdminClient, cloakAppsClientId string) (*ApplicationService, error) {
+func NewApplicationService(adminClient *keycloak.AdminClient, cloakAppsClientId string, refreshIntervalMin int) (*ApplicationService, error) {
 	service := &ApplicationService{
+		done:              make(chan struct{}),
 		adminClient:       adminClient,
 		clientScopes:      make(map[string]string),
 		cloakAppsClientId: cloakAppsClientId,
+		refreshTicker:     time.NewTicker(time.Duration(refreshIntervalMin) * time.Minute),
 	}
 
-	// Fetch and cache client scopes on initialization
 	if err := service.loadClientScopes(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to load client scopes: %w", err)
 	}
+	service.scheduleClientScopesRefresh()
 
 	return service, nil
 }
@@ -45,6 +50,24 @@ func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
 
 	slog.Debug("Loaded client scopes,", "total_number", len(as.clientScopes))
 	return nil
+}
+
+// scheduleClientScopesRefresh refreshes client scopes based on the set interval
+func (as *ApplicationService) scheduleClientScopesRefresh() {
+	go func() {
+		for {
+			select {
+			case <-as.done:
+				as.refreshTicker.Stop()
+				return
+			case <-as.refreshTicker.C:
+				slog.Debug("Automatic client scopes refresh triggered")
+				if err := as.loadClientScopes(context.Background()); err != nil {
+					slog.Error("Error while refreshing client scopes,", "error", err)
+				}
+			}
+		}
+	}()
 }
 
 // GetApplicationsForUser fetches all clients and filters based on user's roles
@@ -166,8 +189,6 @@ func (as *ApplicationService) isInternalClient(clientID string) bool {
 	return false
 }
 
-// RefreshClientScopes reloads client scopes mapping
-// Useful if scopes are added/modified at runtime
-func (as *ApplicationService) RefreshClientScopes(ctx context.Context) error {
-	return as.loadClientScopes(ctx)
+func (as *ApplicationService) ShutDown() {
+	close(as.done)
 }

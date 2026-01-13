@@ -18,10 +18,11 @@ type Config struct {
 	} `mapstructure:"keycloak"`
 
 	Server struct {
-		Port     int    `mapstructure:"port"`
-		Host     string `mapstructure:"host"`
-		Timeout  int    `mapstructure:"timeout"`
-		LogLevel string `mapstructure:"log_level"`
+		Port               int    `mapstructure:"port"`
+		Host               string `mapstructure:"host"`
+		Timeout            int    `mapstructure:"timeout"`
+		LogLevel           string `mapstructure:"log_level"`
+		RefreshIntervalMin int    `mapstructure:"refresh_interval_min"`
 	} `mapstructure:"server"`
 
 	Session struct {
@@ -47,6 +48,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.timeout", 10)
 	viper.SetDefault("server.log_level", "INFO")
+	viper.SetDefault("server.refresh_interval_min", 5)
 	viper.SetDefault("session.max_age", 3600)
 	viper.SetDefault("session.secure", true)
 	viper.SetDefault("organization.name", "Effiware")
@@ -80,6 +82,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.Timeout < 0 {
 		return fmt.Errorf("server.timeout must be positive")
+	}
+	if c.Server.RefreshIntervalMin < 0 {
+		return fmt.Errorf("server.refresh_interval_min must be positive")
 	}
 	if c.Keycloak.Url == "" {
 		return fmt.Errorf("keycloak.url is required")

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -140,7 +141,7 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	}
 
 	ac.setTokenAndExpiry(ctx, &tokenResp, time.Now().Add(time.Duration(tokenResp.ExpiresIn)*time.Second))
-	slog.Debug("Service account token obtained", "expires_in", tokenResp.ExpiresIn)
+	slog.Debug("Service account token obtained", "expires_in", strconv.Itoa(tokenResp.ExpiresIn/60)+"min")
 
 	return nil
 }

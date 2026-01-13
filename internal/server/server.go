@@ -58,11 +58,10 @@ func HttpServer(
 		WriteTimeout: writeTimout * time.Second,
 	}
 
-	//server.RegisterOnShutdown(onServerShutdown)
-	return server
-}
+	server.RegisterOnShutdown(func() {
+		appService.ShutDown()
+		slog.Debug("Server shutdown complete")
+	})
 
-func onServerShutdown() {
-	// Add graceful shutdown logic if needed
-	slog.Debug("Server shutdown complete")
+	return server
 }

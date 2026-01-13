@@ -60,7 +60,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	appService, err := services.NewApplicationService(keycloakClient.AdminClient, cfg.Keycloak.ClientId)
+	appService, err := services.NewApplicationService(
+		keycloakClient.AdminClient, cfg.Keycloak.ClientId, cfg.Server.RefreshIntervalMin,
+	)
 	if err != nil {
 		slog.Error("Failed to create application service,", "error", err)
 		os.Exit(1)
