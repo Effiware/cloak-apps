@@ -1,5 +1,5 @@
 organization:
-  name: "Biddly"
+  name: "Effiware"
 #  custom_description: "Foo <b>Bar</b>"
   
 keycloak:
@@ -14,6 +14,7 @@ server:
 #  host: "localhost"
 #  timeout: 10
   log_level: "DEBUG"
+  refresh_interval_min: 5  # 5min by default
 
 session:
   secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"

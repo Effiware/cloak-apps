@@ -18,20 +18,22 @@ import (
 )
 
 const (
+	keycloakDataTTL               = 5 * time.Minute
 	tokenExpiryBuffer             = 30 * time.Second
 	tokenRefreshSingleflightGroup = "refresh_token"
 )
 
 type AdminClient struct {
-	BaseURL      string
-	Realm        string
-	ClientID     string
-	ClientSecret string
-	httpClient   *http.Client
-	token        *TokenResponse
-	tokenExpiry  time.Time
-	tokenMutex   sync.RWMutex
-	tokenGroup   singleflight.Group
+	BaseURL             string
+	Realm               string
+	ClientID            string
+	ClientSecret        string
+	httpClient          *http.Client
+	token               *TokenResponse
+	tokenExpiry         time.Time
+	tokenMutex          sync.RWMutex
+	tokenGroup          singleflight.Group
+	debouncedGetClients utils.Circuit
 }
 
 type TokenResponse struct {
@@ -75,13 +77,17 @@ type RoleRepresentation struct {
 }
 
 func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient {
-	return &AdminClient{
+	ac := &AdminClient{
 		BaseURL:      baseURL,
 		Realm:        realm,
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}
+
+	ac.debouncedGetClients = utils.DebounceFirst(ac.getClients, keycloakDataTTL)
+
+	return ac
 }
 
 // setTokenAndExpiry is a helper function to set new token and tokenExpiry in a thread-safe manner
@@ -178,7 +184,7 @@ func (ac *AdminClient) setFreshBearerToken(ctx context.Context, req *http.Reques
 	return nil
 }
 
-func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
+func (ac *AdminClient) getClients(ctx context.Context) ([]byte, error) {
 	clientsURL := fmt.Sprintf("%s/admin/realms/%s/clients", ac.BaseURL, ac.Realm)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", clientsURL, nil)
@@ -186,15 +192,24 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 		return nil, fmt.Errorf("failed to create clients request: %w", err)
 	}
 
-	body, err := utils.SendRetryableRequest(
+	resBody, err := utils.SendRetryableRequest(
 		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	return resBody, nil
+}
+
+func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
+	resBody, err := ac.debouncedGetClients(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var clients []ClientRepresentation
-	if err := json.Unmarshal(body, &clients); err != nil {
+	if err := json.Unmarshal(resBody, &clients); err != nil {
 		return nil, fmt.Errorf("failed to decode clients response: %w", err)
 	}
 
@@ -209,7 +224,7 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 		return nil, fmt.Errorf("failed to create client scopes request: %w", err)
 	}
 
-	body, err := utils.SendRetryableRequest(
+	resBody, err := utils.SendRetryableRequest(
 		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
 	)
 	if err != nil {
@@ -217,35 +232,35 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 	}
 
 	var scopes []ClientScopeRepresentation
-	if err := json.Unmarshal(body, &scopes); err != nil {
+	if err := json.Unmarshal(resBody, &scopes); err != nil {
 		return nil, fmt.Errorf("failed to decode client scopes response: %w", err)
 	}
 
 	return scopes, nil
 }
 
-func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([]RoleRepresentation, error) {
-	rolesURL := fmt.Sprintf("%s/admin/realms/%s/clients/%s/roles", ac.BaseURL, ac.Realm, clientUUID)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client roles request: %w", err)
-	}
-
-	body, err := utils.SendRetryableRequest(
-		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	var roles []RoleRepresentation
-	if err := json.Unmarshal(body, &roles); err != nil {
-		return nil, fmt.Errorf("failed to decode client roles response: %w", err)
-	}
-
-	return roles, nil
-}
+//func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([]RoleRepresentation, error) {
+//	rolesURL := fmt.Sprintf("%s/admin/realms/%s/clients/%s/roles", ac.BaseURL, ac.Realm, clientUUID)
+//
+//	req, err := http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
+//	if err != nil {
+//		return nil, fmt.Errorf("failed to create client roles request: %w", err)
+//	}
+//
+//	resBody, err := utils.SendRetryableRequest(
+//		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
+//	)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	var roles []RoleRepresentation
+//	if err := json.Unmarshal(resBody, &roles); err != nil {
+//		return nil, fmt.Errorf("failed to decode client roles response: %w", err)
+//	}
+//
+//	return roles, nil
+//}
 
 func ParseDescriptionJSON(description string) (*DescriptionMetadata, error) {
 	if description == "" {

@@ -7,10 +7,17 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"sync"
+	"time"
 )
 
+// BeforeCallHook is a hook (function) signature that should be called before applying the pattern
 type BeforeCallHook func(ctx context.Context, req *http.Request) error
 
+// Circuit is a function signature we want to apply the pattern on
+type Circuit func(context.Context) ([]byte, error)
+
+// deepCopyRequest returns deep copy (body included) of the request and re-sets the original request
 func deepCopyRequest(ctx context.Context, reqInit *http.Request) (*http.Request, error) {
 	if reqInit.Body == nil {
 		return reqInit.Clone(ctx), nil
@@ -28,6 +35,10 @@ func deepCopyRequest(ctx context.Context, reqInit *http.Request) (*http.Request,
 	return reqClone, nil
 }
 
+// SendRetryableRequest is a retryable call pattern, that is applied on specific retriableStatuses up to maxRetryTimes
+// using specified http.Client (or a default one) with a prior call to BeforeCallHook (if provided)
+//
+// Note: initial http.Request can be later reused
 func SendRetryableRequest(
 	ctx context.Context,
 	req *http.Request,
@@ -82,4 +93,29 @@ func SendRetryableRequest(
 	}
 
 	return nil, fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
+}
+
+// DebounceFirst tracks only the last time it was called and return a cached result
+func DebounceFirst(circuit Circuit, ttl time.Duration) Circuit {
+	var threshold time.Time
+	var result []byte
+	var err error
+	var m sync.Mutex
+
+	return func(ctx context.Context) ([]byte, error) {
+		m.Lock()
+		defer m.Unlock()
+
+		if time.Now().Before(threshold) {
+			return result, err
+		}
+
+		result, err = circuit(ctx)
+		if err == nil {
+			// Move TTL threshold only if no error
+			threshold = time.Now().Add(ttl)
+		}
+
+		return result, err
+	}
 }
