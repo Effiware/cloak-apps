@@ -1,4 +1,4 @@
-package middleware
+package middlewares
 
 import (
 	"context"
@@ -30,17 +30,17 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token, err := sessionStore.GetToken(r)
 			if err != nil {
-				slog.Warn("Failed to obtain token from the session store")
+				slog.Warn("Failed to obtain token from the session store, redirecting to the login page")
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return
 			} else if token == nil {
-				slog.Info("Token not present in the session store")
+				slog.Info("Token not present in the session store, redirecting to the login page")
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return
 			}
 
 			if !token.Valid() {
-				slog.Debug("Token expired for")
+				slog.Warn("Token not valid (e.g. stale one), redirecting to the login page")
 				sessionStore.Clear(w, r)
 				http.Redirect(w, r, "/auth/login", http.StatusFound)
 				return

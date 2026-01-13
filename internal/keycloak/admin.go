@@ -77,12 +77,23 @@ type RoleRepresentation struct {
 }
 
 func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient {
+	transport := &http.Transport{
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 5, // Conservative: Increase it when many users expected
+		IdleConnTimeout:     60 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableKeepAlives:   false,
+	}
+
 	ac := &AdminClient{
 		BaseURL:      baseURL,
 		Realm:        realm,
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
 	}
 
 	ac.debouncedGetClients = utils.DebounceFirst(ac.getClients, keycloakDataTTL)

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
-	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
 )
 
@@ -71,16 +71,16 @@ func (as *ApplicationService) scheduleClientScopesRefresh() {
 }
 
 // GetApplicationsForUser fetches all clients and filters based on user's roles
-func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userInfo *middleware.UserInfo) ([]models.Application, error) {
+func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userInfo *middlewares.UserInfo) ([]models.Application, error) {
 	clients, err := as.adminClient.GetClients(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get clients: %w", err)
 	}
+
 	slog.Debug("Fetching applications for", "user", userInfo.PreferredUsername, "roles", userInfo.ClientRoles)
 
 	var applications []models.Application
 	for _, client := range clients {
-		// Skip internal Keycloak clients (realm-management, account, etc.)
 		if as.isInternalClient(client.ClientID) {
 			continue
 		}

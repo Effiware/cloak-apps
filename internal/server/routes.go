@@ -7,7 +7,7 @@ import (
 	_ "github.com/effiware/cloak-apps/internal/docs"
 	"github.com/effiware/cloak-apps/internal/server/api"
 	"github.com/effiware/cloak-apps/internal/server/hda"
-	authmw "github.com/effiware/cloak-apps/internal/server/middleware"
+	mw "github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -31,7 +31,7 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 
 	// Protected routes (require authentication)
 	r.Group(func(r chi.Router) {
-		r.Use(authmw.AuthRequired(hdaAndApi.keycloakClient, hdaAndApi.sessionStore))
+		r.Use(mw.AuthRequired(hdaAndApi.keycloakClient, hdaAndApi.sessionStore))
 
 		// Auth routes (protected)
 		r.Get("/auth/sso-redirect", hdaAndApi.authHandlers.HandleSSORedirect)

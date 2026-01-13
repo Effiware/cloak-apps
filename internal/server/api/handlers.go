@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	_ "github.com/effiware/cloak-apps/internal/docs"
-	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
 )
 
@@ -64,11 +64,11 @@ func GetOrganization(orgService interface {
 // @Produce json
 // @Router /applications [get]
 func GetApplications(appService interface {
-	GetApplicationsForUser(ctx context.Context, userInfo *middleware.UserInfo) ([]models.Application, error)
+	GetApplicationsForUser(ctx context.Context, userInfo *middlewares.UserInfo) ([]models.Application, error)
 }) EndpointHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) (int, any, error) {
 		// Get user info from context
-		userInfo, ok := middleware.GetUserFromContext(r.Context())
+		userInfo, ok := middlewares.GetUserFromContext(r.Context())
 		if !ok {
 			return http.StatusUnauthorized, map[string]string{"error": "unauthorized"}, nil
 		}

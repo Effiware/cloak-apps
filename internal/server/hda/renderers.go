@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/services"
 	views "github.com/effiware/cloak-apps/internal/views"
 )
@@ -20,8 +20,7 @@ func (e *UnauthorizedError) Error() string {
 
 func RenderRoot(orgService *services.OrganizationService, appService *services.ApplicationService) ViewHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		// Get user info from context
-		userInfo, ok := middleware.GetUserFromContext(r.Context())
+		userInfo, ok := middlewares.GetUserFromContext(r.Context())
 		if !ok {
 			slog.Error("Failed to get user from context")
 			return &UnauthorizedError{Message: "User not authenticated"}

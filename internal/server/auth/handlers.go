@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
-	"github.com/effiware/cloak-apps/internal/server/middleware"
+	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"golang.org/x/oauth2"
 )
@@ -141,7 +141,7 @@ func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
 // HandleSSORedirect redirects user to specific client's SSO login
 func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 	// Get authenticated user from context (guaranteed to exist due to AuthRequired middleware)
-	userInfo, ok := middleware.GetUserFromContext(r.Context())
+	userInfo, ok := middlewares.GetUserFromContext(r.Context())
 	if !ok {
 		slog.Error("User context not found in SSO redirect")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
