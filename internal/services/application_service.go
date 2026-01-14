@@ -171,7 +171,6 @@ func (as *ApplicationService) extractScopeCategory(scopeNames []string, prefix s
 // isInternalClient checks if a client is a Keycloak internal client
 func (as *ApplicationService) isInternalClient(clientID string) bool {
 	internalClients := []string{
-		"account",
 		"account-console",
 		"admin-cli",
 		"broker",

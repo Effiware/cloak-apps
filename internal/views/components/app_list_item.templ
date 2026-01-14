@@ -1,0 +1,38 @@
+package components
+
+import (
+	"github.com/effiware/cloak-apps/internal/server/models"
+)
+
+templ AppListItem(app models.Application) {
+	<a href={ templ.SafeURL(app.URL) } target="_blank" class="block group">
+		<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all">
+			<div class="flex items-center space-x-3">
+				<div class="flex-shrink-0">
+					if app.ThumbnailURL != "" {
+						<div class="h-9 w-9 rounded-md flex items-center justify-center overflow-hidden">
+							<img src={ app.ThumbnailURL } alt={ app.Name } class="h-full w-full object-cover"/>
+						</div>
+					} else if app.IconEmoji != "" {
+						<div class="h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+							<span class="text-lg">{ app.IconEmoji }</span>
+						</div>
+					} else {
+						<div class="h-9 w-9 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+							<span class="text-lg">📦</span>
+						</div>
+					}
+				</div>
+				<div class="flex-1 min-w-0">
+					<h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{ app.Name }</h3>
+					<p class="text-xs text-gray-500 dark:text-gray-400">{ app.Description }</p>
+				</div>
+				<div class="flex-shrink-0">
+					<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+					</svg>
+				</div>
+			</div>
+		</div>
+	</a>
+}

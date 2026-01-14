@@ -14,6 +14,25 @@ type contextKey string
 
 const UserContextKey contextKey = "user"
 
+// isHTMXRequest checks if the request is from HTMX
+func isHTMXRequest(r *http.Request) bool {
+	return r.Header.Get("HX-Request") == "true"
+}
+
+// redirectToLogin handles redirect for both regular and HTMX requests
+// For HTMX requests, uses HX-Redirect header to trigger full page navigation
+// For regular requests, uses standard HTTP 302 redirect
+func redirectToLogin(w http.ResponseWriter, r *http.Request) {
+	if isHTMXRequest(r) {
+		// HTMX request: use HX-Redirect header for full page navigation
+		w.Header().Set("HX-Redirect", "/auth/login")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	// Regular request: standard redirect
+	http.Redirect(w, r, "/auth/login", http.StatusFound)
+}
+
 type UserInfo struct {
 	Sub               string
 	Email             string
@@ -32,11 +51,11 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 			token, err := sessionStore.GetToken(r)
 			if err != nil {
 				slog.Warn("Failed to obtain token from the session store, redirecting to the login page")
-				http.Redirect(w, r, "/auth/login", http.StatusFound)
+				redirectToLogin(w, r)
 				return
 			} else if token == nil {
 				slog.Info("Token not present in the session store, redirecting to login page")
-				http.Redirect(w, r, "/auth/login", http.StatusFound)
+				redirectToLogin(w, r)
 				return
 			}
 
@@ -48,7 +67,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				if accessToken == "" {
 					slog.Warn("No access_token in session, redirecting to login page")
 					sessionStore.Clear(w, r)
-					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					redirectToLogin(w, r)
 					return
 				}
 
@@ -56,14 +75,14 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				if err != nil {
 					slog.Error("Token introspection failed, redirecting to login page", "error", err)
 					sessionStore.Clear(w, r)
-					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					redirectToLogin(w, r)
 					return
 				}
 
 				if !result.Active {
 					slog.Warn("Token is not active (expired or revoked), redirecting to login page")
 					sessionStore.Clear(w, r)
-					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					redirectToLogin(w, r)
 					return
 				}
 
@@ -79,14 +98,14 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 					if err != nil {
 						slog.Warn("Token refresh failed, redirecting to login page", "error", err)
 						sessionStore.Clear(w, r)
-						http.Redirect(w, r, "/auth/login", http.StatusFound)
+						redirectToLogin(w, r)
 						return
 					}
 
 					if err := sessionStore.SaveToken(w, r, newToken); err != nil {
 						slog.Error("Failed to save refreshed token to session", "error", err)
 						sessionStore.Clear(w, r)
-						http.Redirect(w, r, "/auth/login", http.StatusFound)
+						redirectToLogin(w, r)
 						return
 					}
 
@@ -99,7 +118,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				if !ok {
 					slog.Warn("No id_token, redirecting to the login page")
 					sessionStore.Clear(w, r)
-					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					redirectToLogin(w, r)
 					return
 				}
 
@@ -107,7 +126,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				if err != nil {
 					slog.Error("Invalid token, redirecting to login page")
 					sessionStore.Clear(w, r)
-					http.Redirect(w, r, "/auth/login", http.StatusFound)
+					redirectToLogin(w, r)
 					return
 				}
 

@@ -37,7 +37,8 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 		r.Get("/auth/sso-redirect", hdaAndApi.authHandlers.HandleSSORedirect)
 
 		// HDA routes
-		r.HandleFunc("/", hda.WithJsonFallback(hda.RenderRoot(hdaAndApi.orgService, hdaAndApi.appService)))
+		r.HandleFunc("/", hda.WithJsonFallback(hda.RenderIndex(hdaAndApi.orgService)))
+		r.HandleFunc("/hda/applications", hda.WithJsonFallback(hda.RenderApplications(hdaAndApi.appService)))
 
 		// API routes
 		r.Get("/api/v1/organization", api.JsonHandler(api.GetOrganization(hdaAndApi.orgService)))
