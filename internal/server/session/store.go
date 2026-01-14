@@ -2,7 +2,7 @@ package session
 
 import (
 	"encoding/gob"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -29,34 +29,76 @@ func init() {
 	gob.Register(time.Time{})
 }
 
-// Store currently is implemented as a [FileSystemStore](https://pkg.go.dev/github.com/gorilla/sessions#FilesystemStore)
-// TODO: Consider using SQL/KV -based alternative
+// Store wraps different session store backends (filesystem, cookie, redis)
 type Store struct {
-	store  sessions.Store
-	maxAge int
+	store     sessions.Store
+	maxAge    int
+	storeType string // "filesystem", "cookie", or "redis"
 }
 
-func NewStore(secret string, maxAge int, secure bool) *Store {
+// StoreConfig holds configuration for creating a session store
+type StoreConfig struct {
+	Secret    string
+	MaxAge    int
+	Secure    bool
+	StoreType string // "filesystem", "cookie", or "redis"
+	RedisURL  string // Only for redis store
+}
+
+// NewStore creates a new session store based on configuration
+func NewStore(cfg StoreConfig) (*Store, error) {
+	switch cfg.StoreType {
+	case "filesystem":
+		return newFilesystemStore(cfg)
+	case "cookie":
+		return newCookieStore(cfg)
+	case "redis":
+		return nil, fmt.Errorf("redis store not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown store type: %s", cfg.StoreType)
+	}
+}
+
+// newFilesystemStore creates a filesystem-based session store (Tier 1)
+func newFilesystemStore(cfg StoreConfig) (*Store, error) {
 	if err := os.MkdirAll(sessionDir, 0700); err != nil {
-		slog.Error("Failed to create session directory,", "error", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to create session directory: %w", err)
 	}
 
-	store := sessions.NewFilesystemStore(sessionDir, []byte(secret))
-	// Even with FilesystemStore, the session ID and metadata are stored in cookies
+	store := sessions.NewFilesystemStore(sessionDir, []byte(cfg.Secret))
 	store.MaxLength(sessionMaxLength)
 	store.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   maxAge,
+		MaxAge:   cfg.MaxAge,
 		HttpOnly: true,
-		Secure:   secure,
+		Secure:   cfg.Secure,
 		SameSite: http.SameSiteLaxMode,
 	}
 
 	return &Store{
-		store:  store,
-		maxAge: maxAge,
+		store:     store,
+		maxAge:    cfg.MaxAge,
+		storeType: "filesystem",
+	}, nil
+}
+
+// newCookieStore creates a cookie-based session store (Tier 2)
+func newCookieStore(cfg StoreConfig) (*Store, error) {
+	store := sessions.NewCookieStore([]byte(cfg.Secret))
+	// Note: CookieStore doesn't have MaxLength method (cookies auto-limited by browser)
+	store.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   cfg.MaxAge,
+		HttpOnly: true,
+		Secure:   cfg.Secure,
+		SameSite: http.SameSiteLaxMode,
 	}
+
+	return &Store{
+		store:     store,
+		maxAge:    cfg.MaxAge,
+		storeType: "cookie",
+	}, nil
 }
 
 func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.Token) error {
@@ -65,14 +107,22 @@ func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.
 		return err
 	}
 
-	session.Values[keyAccessToken] = token.AccessToken
-	session.Values[keyTokenType] = token.TokenType
-	session.Values[keyRefreshToken] = token.RefreshToken
-	session.Values[keyExpiry] = token.Expiry
+	// For CookieStore (Tier 2), only store access_token to reduce cookie size
+	// (introspection requires access_token, not id_token)
+	if s.storeType == "cookie" {
+		// Only store access_token - needed for Keycloak introspection
+		session.Values[keyAccessToken] = token.AccessToken
+	} else {
+		// For filesystem/redis stores, store all tokens (needed for token refresh)
+		session.Values[keyAccessToken] = token.AccessToken
+		session.Values[keyTokenType] = token.TokenType
+		session.Values[keyRefreshToken] = token.RefreshToken
+		session.Values[keyExpiry] = token.Expiry
 
-	// Store ID token if present
-	if idToken, ok := token.Extra("id_token").(string); ok {
-		session.Values[keyIDToken] = idToken
+		// Store ID token if present
+		if idToken, ok := token.Extra("id_token").(string); ok {
+			session.Values[keyIDToken] = idToken
+		}
 	}
 
 	return session.Save(r, w)
@@ -84,6 +134,22 @@ func (s *Store) GetToken(r *http.Request) (*oauth2.Token, error) {
 		return nil, err
 	}
 
+	// For CookieStore (Tier 2), only access_token is stored
+	if s.storeType == "cookie" {
+		accessToken, ok := session.Values[keyAccessToken].(string)
+		if !ok || accessToken == "" {
+			return nil, nil
+		}
+
+		// Return a minimal token with only access_token
+		// (introspection will be used for validation, not token.Valid())
+		token := &oauth2.Token{
+			AccessToken: accessToken,
+		}
+		return token, nil
+	}
+
+	// For filesystem/redis stores, retrieve full token
 	accessToken, ok := session.Values[keyAccessToken].(string)
 	if !ok || accessToken == "" {
 		return nil, nil

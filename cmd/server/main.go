@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/keycloak"
@@ -44,8 +45,24 @@ func main() {
 	}
 	slog.Info("Keycloak client initialized for", "realm", cfg.Keycloak.Realm)
 
-	sessionStore := session.NewStore(cfg.Session.Secret, cfg.Session.MaxAge, cfg.Session.Secure)
-	slog.Info("Session store initialized with", "max_age", cfg.Session.MaxAge, "secure", cfg.Session.Secure)
+	// Enable token introspection for cookie store (required for Tier 2)
+	if cfg.Session.Store == "cookie" {
+		keycloakClient.EnableIntrospection(time.Duration(cfg.Session.IntrospectionCacheTTL) * time.Second)
+		slog.Info("Token introspection enabled (cookie store requires it)", "cache_ttl_seconds", cfg.Session.IntrospectionCacheTTL)
+	}
+
+	sessionStore, err := session.NewStore(session.StoreConfig{
+		Secret:    cfg.Session.Secret,
+		MaxAge:    cfg.Session.MaxAge,
+		Secure:    cfg.Session.Secure,
+		StoreType: cfg.Session.Store,
+		RedisURL:  cfg.Session.RedisURL,
+	})
+	if err != nil {
+		slog.Error("Failed to create session store,", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Session store initialized", "type", cfg.Session.Store, "max_age", cfg.Session.MaxAge, "secure", cfg.Session.Secure)
 
 	authHandlers := auth.NewHandlers(keycloakClient, sessionStore)
 	slog.Info("Auth handlers initialized")
