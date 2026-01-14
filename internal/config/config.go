@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -30,7 +31,6 @@ type Config struct {
 		MaxAge                int    `mapstructure:"max_age"`
 		Secure                bool   `mapstructure:"secure"`
 		Store                 string `mapstructure:"store"`                   // Options: "filesystem", "cookie", "redis"
-		CookieIntrospection   bool   `mapstructure:"cookie_introspection"`    // Only for store=cookie
 		IntrospectionCacheTTL int    `mapstructure:"introspection_cache_ttl"` // Cache TTL in seconds
 		RedisURL              string `mapstructure:"redis_url"`               // Only for store=redis
 	} `mapstructure:"session"`
@@ -56,7 +56,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("session.max_age", 3600)
 	viper.SetDefault("session.secure", true)
 	viper.SetDefault("session.store", "filesystem")
-	viper.SetDefault("session.cookie_introspection", false)
 	viper.SetDefault("session.introspection_cache_ttl", 15)
 	viper.SetDefault("organization.name", "Effiware")
 	viper.SetDefault("organization.home_url", "https://effiware.com")
@@ -109,25 +108,15 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("session.max_age must be positive")
 	}
 
-	// Validate session store type
 	validStores := []string{"filesystem", "cookie", "redis"}
-	isValidStore := false
-	for _, store := range validStores {
-		if c.Session.Store == store {
-			isValidStore = true
-			break
-		}
-	}
-	if !isValidStore {
+	if !slices.Contains(validStores, c.Session.Store) {
 		return fmt.Errorf("session.store must be one of: %v, got '%s'", validStores, c.Session.Store)
 	}
 
-	// Validate redis configuration
 	if c.Session.Store == "redis" && c.Session.RedisURL == "" {
 		return fmt.Errorf("session.redis_url is required when session.store is 'redis'")
 	}
 
-	// Validate introspection cache TTL
 	if c.Session.IntrospectionCacheTTL < 0 {
 		return fmt.Errorf("session.introspection_cache_ttl must be positive")
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/session"
+	"github.com/mitchellh/mapstructure"
 )
 
 type contextKey string
@@ -41,9 +42,8 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 
 			var userInfo *UserInfo
 
-			// Use introspection for CookieStore (Tier 2), traditional JWT verification for others
 			if keycloakClient.IsIntrospectionEnabled() {
-				// Tier 2: Token introspection
+				// Tier 2: Token introspection for CookieStore, traditional JWT verification for others
 				accessToken := token.AccessToken
 				if accessToken == "" {
 					slog.Warn("No access_token in session, redirecting to login page")
@@ -103,7 +103,6 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 					return
 				}
 
-				// Verify ID token
 				idToken, err := keycloakClient.Verifier.Verify(r.Context(), rawIDToken)
 				if err != nil {
 					slog.Error("Invalid token, redirecting to login page")
@@ -112,7 +111,6 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 					return
 				}
 
-				// Parse claims
 				var claims struct {
 					Sub               string `json:"sub"`
 					Email             string `json:"email"`
@@ -162,62 +160,58 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 	}
 }
 
-// buildUserInfoFromClaims constructs UserInfo from introspection result claims
+// buildUserInfoFromClaims constructs UserInfo from introspection result claims using mapstructure
 func buildUserInfoFromClaims(claims map[string]interface{}) *UserInfo {
+	var claimsStruct struct {
+		Sub               string `mapstructure:"sub"`
+		Email             string `mapstructure:"email"`
+		Name              string `mapstructure:"name"`
+		PreferredUsername string `mapstructure:"preferred_username"`
+		GivenName         string `mapstructure:"given_name"`
+		FamilyName        string `mapstructure:"family_name"`
+		EmailVerified     bool   `mapstructure:"email_verified"`
+		RealmAccess       struct {
+			Roles []string `mapstructure:"roles"`
+		} `mapstructure:"realm_access"`
+		ResourceAccess map[string]struct {
+			Roles []string `mapstructure:"roles"`
+		} `mapstructure:"resource_access"`
+	}
+
+	// Configure decoder to be lenient with type conversions
+	config := &mapstructure.DecoderConfig{
+		WeaklyTypedInput: true, // Convert types loosely (e.g., allows interface{} -> concrete types)
+		Result:           &claimsStruct,
+		TagName:          "mapstructure",
+	}
+
+	decoder, err := mapstructure.NewDecoder(config)
+	if err != nil {
+		slog.Error("Failed to create claims decoder", "error", err)
+		return &UserInfo{ClientRoles: make(map[string][]string)}
+	}
+
+	if err := decoder.Decode(claims); err != nil {
+		slog.Warn("Failed to decode introspection claims", "error", err)
+		// Return empty UserInfo rather than failing the request (graceful degradation)
+		return &UserInfo{ClientRoles: make(map[string][]string)}
+	}
+
 	userInfo := &UserInfo{
-		ClientRoles: make(map[string][]string),
+		Sub:               claimsStruct.Sub,
+		Email:             claimsStruct.Email,
+		Name:              claimsStruct.Name,
+		PreferredUsername: claimsStruct.PreferredUsername,
+		GivenName:         claimsStruct.GivenName,
+		FamilyName:        claimsStruct.FamilyName,
+		EmailVerified:     claimsStruct.EmailVerified,
+		Roles:             claimsStruct.RealmAccess.Roles,
+		ClientRoles:       make(map[string][]string),
 	}
 
-	// Extract simple string fields
-	if sub, ok := claims["sub"].(string); ok {
-		userInfo.Sub = sub
-	}
-	if email, ok := claims["email"].(string); ok {
-		userInfo.Email = email
-	}
-	if name, ok := claims["name"].(string); ok {
-		userInfo.Name = name
-	}
-	if preferredUsername, ok := claims["preferred_username"].(string); ok {
-		userInfo.PreferredUsername = preferredUsername
-	}
-	if givenName, ok := claims["given_name"].(string); ok {
-		userInfo.GivenName = givenName
-	}
-	if familyName, ok := claims["family_name"].(string); ok {
-		userInfo.FamilyName = familyName
-	}
-	if emailVerified, ok := claims["email_verified"].(bool); ok {
-		userInfo.EmailVerified = emailVerified
-	}
-
-	// Extract realm roles
-	if realmAccess, ok := claims["realm_access"].(map[string]interface{}); ok {
-		if roles, ok := realmAccess["roles"].([]interface{}); ok {
-			userInfo.Roles = make([]string, 0, len(roles))
-			for _, role := range roles {
-				if roleStr, ok := role.(string); ok {
-					userInfo.Roles = append(userInfo.Roles, roleStr)
-				}
-			}
-		}
-	}
-
-	// Extract resource (client) roles
-	if resourceAccess, ok := claims["resource_access"].(map[string]interface{}); ok {
-		for clientID, access := range resourceAccess {
-			if accessMap, ok := access.(map[string]interface{}); ok {
-				if roles, ok := accessMap["roles"].([]interface{}); ok {
-					clientRoles := make([]string, 0, len(roles))
-					for _, role := range roles {
-						if roleStr, ok := role.(string); ok {
-							clientRoles = append(clientRoles, roleStr)
-						}
-					}
-					userInfo.ClientRoles[clientID] = clientRoles
-				}
-			}
-		}
+	// Extract client roles from resource_access
+	for clientID, access := range claimsStruct.ResourceAccess {
+		userInfo.ClientRoles[clientID] = access.Roles
 	}
 
 	return userInfo

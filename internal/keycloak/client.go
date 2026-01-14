@@ -3,20 +3,24 @@ package keycloak
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/effiware/cloak-apps/utils"
 	"golang.org/x/oauth2"
 )
 
 type Client struct {
-	IssuerURL            string
-	Provider             *oidc.Provider
-	OAuth2Config         *oauth2.Config
-	AdminClient          *AdminClient
-	Verifier             *oidc.IDTokenVerifier
-	introspectionCache   *IntrospectionCache
-	introspectionEnabled bool
+	IssuerURL             string
+	Provider              *oidc.Provider
+	OAuth2Config          *oauth2.Config
+	AdminClient           *AdminClient
+	Verifier              *oidc.IDTokenVerifier
+	httpClient            *http.Client
+	introspectionEnabled  bool
+	introspectionDone     chan struct{}
+	cachedIntrospectToken utils.CircuitWithKey
 }
 
 func NewClient(ctx context.Context, keycloakURL, realm, clientID, clientSecret, redirectURI string) (*Client, error) {
@@ -49,18 +53,18 @@ func NewClient(ctx context.Context, keycloakURL, realm, clientID, clientSecret, 
 		OAuth2Config:         oauth2Config,
 		AdminClient:          adminClient,
 		Verifier:             verifier,
-		introspectionCache:   nil,
+		httpClient:           &http.Client{Timeout: 5 * time.Second},
 		introspectionEnabled: false,
 	}, nil
-}
-
-// EnableIntrospection activates token introspection with caching
-func (c *Client) EnableIntrospection(cacheTTL time.Duration) {
-	c.introspectionCache = NewIntrospectionCache(cacheTTL)
-	c.introspectionEnabled = true
 }
 
 // IsIntrospectionEnabled returns whether introspection is enabled
 func (c *Client) IsIntrospectionEnabled() bool {
 	return c.introspectionEnabled
+}
+
+func (c *Client) Shutdown() {
+	if c.introspectionEnabled {
+		close(c.introspectionDone)
+	}
 }

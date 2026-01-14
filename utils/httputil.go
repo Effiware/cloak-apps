@@ -3,6 +3,8 @@ package utils
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +18,9 @@ type BeforeCallHook func(ctx context.Context, req *http.Request) error
 
 // Circuit is a function signature we want to apply the pattern on
 type Circuit func(context.Context) ([]byte, error)
+
+// CircuitWithKey is a function signature (with unique keys) we want to apply the pattern on
+type CircuitWithKey func(context.Context, string) ([]byte, error)
 
 // deepCopyRequest returns deep copy (body included) of the request and re-sets the original request
 func deepCopyRequest(ctx context.Context, reqInit *http.Request) (*http.Request, error) {
@@ -95,9 +100,9 @@ func SendRetryableRequest(
 	return nil, fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
 }
 
-// DebounceFirst tracks only the last time it was called and return a cached result
-func DebounceFirst(circuit Circuit, ttl time.Duration) Circuit {
-	var threshold time.Time
+// CacheFirstTTL tracks last time it was called and returns a cached result until ttl expires
+func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
+	var expires time.Time
 	var result []byte
 	var err error
 	var m sync.Mutex
@@ -106,16 +111,82 @@ func DebounceFirst(circuit Circuit, ttl time.Duration) Circuit {
 		m.Lock()
 		defer m.Unlock()
 
-		if time.Now().Before(threshold) {
-			return result, err
-		}
-
-		result, err = circuit(ctx)
-		if err == nil {
-			// Move TTL threshold only if no error
-			threshold = time.Now().Add(ttl)
+		if time.Now().After(expires) {
+			result, err = circuit(ctx)
+			if err == nil {
+				// Move expiration only if no error
+				expires = time.Now().Add(ttl)
+			}
 		}
 
 		return result, err
+	}
+}
+
+type resultWithTTL struct {
+	expires time.Time
+	result  []byte
+	err     error
+}
+
+// hashKey creates a SHA-256 hash of the key for use as cache key (fixed-size)
+func hashKey(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
+}
+
+// CacheFirstForKeyTTL tracks last call for each key and returns a cached result until ttl expires
+func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Duration, hashKeys bool) CircuitWithKey {
+	results := map[string]*resultWithTTL{}
+	cleanupTicker := time.NewTicker(2 * ttl)
+	var m sync.Mutex
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				cleanupTicker.Stop()
+				return
+			case <-cleanupTicker.C:
+				now := time.Now()
+				m.Lock()
+				for key, res := range results {
+					if now.After(res.expires) {
+						delete(results, key)
+					}
+				}
+				m.Unlock()
+			}
+		}
+	}()
+
+	return func(ctx context.Context, key string) ([]byte, error) {
+		_key := key
+		if hashKeys {
+			_key = hashKey(key)
+		}
+
+		m.Lock()
+		defer m.Unlock()
+		cache := results[_key]
+
+		if cache == nil || time.Now().After(cache.expires) {
+			var expires time.Time
+
+			res, err := circuit(ctx, key)
+			if err == nil {
+				// Set expiration only if no error
+				expires = time.Now().Add(ttl)
+			}
+
+			results[_key] = &resultWithTTL{
+				expires: expires,
+				result:  res,
+				err:     err,
+			}
+			return res, err
+		}
+
+		return cache.result, cache.err
 	}
 }

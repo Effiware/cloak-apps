@@ -24,16 +24,16 @@ const (
 )
 
 type AdminClient struct {
-	BaseURL             string
-	Realm               string
-	ClientID            string
-	ClientSecret        string
-	httpClient          *http.Client
-	token               *TokenResponse
-	tokenExpiry         time.Time
-	tokenMutex          sync.RWMutex
-	tokenGroup          singleflight.Group
-	debouncedGetClients utils.Circuit
+	BaseURL          string
+	Realm            string
+	ClientID         string
+	ClientSecret     string
+	httpClient       *http.Client
+	token            *TokenResponse
+	tokenExpiry      time.Time
+	tokenMutex       sync.RWMutex
+	tokenGroup       singleflight.Group
+	cachedGetClients utils.Circuit
 }
 
 type TokenResponse struct {
@@ -96,7 +96,7 @@ func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient 
 		},
 	}
 
-	ac.debouncedGetClients = utils.DebounceFirst(ac.getClients, keycloakDataTTL)
+	ac.cachedGetClients = utils.CacheFirstTTL(ac.getClients, keycloakDataTTL)
 
 	return ac
 }
@@ -214,7 +214,7 @@ func (ac *AdminClient) getClients(ctx context.Context) ([]byte, error) {
 }
 
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
-	resBody, err := ac.debouncedGetClients(ctx)
+	resBody, err := ac.cachedGetClients(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -249,29 +249,6 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 
 	return scopes, nil
 }
-
-//func (ac *AdminClient) GetClientRoles(ctx context.Context, clientUUID string) ([]RoleRepresentation, error) {
-//	rolesURL := fmt.Sprintf("%s/admin/realms/%s/clients/%s/roles", ac.BaseURL, ac.Realm, clientUUID)
-//
-//	req, err := http.NewRequestWithContext(ctx, "GET", rolesURL, nil)
-//	if err != nil {
-//		return nil, fmt.Errorf("failed to create client roles request: %w", err)
-//	}
-//
-//	resBody, err := utils.SendRetryableRequest(
-//		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
-//	)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	var roles []RoleRepresentation
-//	if err := json.Unmarshal(resBody, &roles); err != nil {
-//		return nil, fmt.Errorf("failed to decode client roles response: %w", err)
-//	}
-//
-//	return roles, nil
-//}
 
 func ParseDescriptionJSON(description string) (*DescriptionMetadata, error) {
 	if description == "" {

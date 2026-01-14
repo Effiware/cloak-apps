@@ -60,6 +60,7 @@ func HttpServer(
 
 	server.RegisterOnShutdown(func() {
 		appService.ShutDown()
+		keycloakClient.Shutdown()
 		slog.Debug("Server shutdown complete")
 	})
 

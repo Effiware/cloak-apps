@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/effiware/cloak-apps/utils"
 )
 
 // IntrospectionResponse represents the response from Keycloak's introspection endpoint
@@ -35,19 +37,25 @@ type IntrospectionResponse struct {
 	ResourceAccess map[string]interface{} `json:"resource_access,omitempty"`
 }
 
-// IntrospectToken validates a token using Keycloak's introspection endpoint
-// Returns the introspection result with claims if the token is valid
-func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectionResult, error) {
-	// Check cache first
-	if c.introspectionCache != nil {
-		if cached, found := c.introspectionCache.Get(token); found {
-			slog.Debug("Introspection cache hit")
-			return cached, nil
-		}
-		slog.Debug("Introspection cache miss")
-	}
+type IntrospectionResult struct {
+	Active bool
+	Claims map[string]interface{}
+}
 
-	// Call Keycloak introspection endpoint
+// EnableIntrospection activates token introspection with caching
+func (c *Client) EnableIntrospection(introspectionCacheTTL time.Duration) {
+	c.introspectionEnabled = true
+	c.introspectionDone = make(chan struct{})
+	c.cachedIntrospectToken = utils.CacheFirstForKeyTTL(
+		c.introspectionDone,
+		c.introspectToken,
+		introspectionCacheTTL,
+		true,
+	)
+}
+
+// introspectToken validates a token using Keycloak's introspection endpoint
+func (c *Client) introspectToken(ctx context.Context, token string) ([]byte, error) {
 	introspectionURL := fmt.Sprintf("%s/protocol/openid-connect/token/introspect", c.IssuerURL)
 
 	data := url.Values{}
@@ -63,7 +71,7 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 	req.SetBasicAuth(c.OAuth2Config.ClientID, c.OAuth2Config.ClientSecret)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("introspection request failed: %w", err)
 	}
@@ -74,12 +82,26 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 		return nil, fmt.Errorf("introspection failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
+	resBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return resBody, nil
+}
+
+// IntrospectToken returns the introspection result with claims if the token is valid
+func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectionResult, error) {
+	introspBody, err := c.cachedIntrospectToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
 	var introspResp IntrospectionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&introspResp); err != nil {
+	if err := json.Unmarshal(introspBody, &introspResp); err != nil {
 		return nil, fmt.Errorf("failed to decode introspection response: %w", err)
 	}
 
-	// Build result
 	result := &IntrospectionResult{
 		Active: introspResp.Active,
 		Claims: make(map[string]interface{}),
@@ -96,11 +118,6 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 		result.Claims["email_verified"] = introspResp.EmailVerified
 		result.Claims["realm_access"] = introspResp.RealmAccess
 		result.Claims["resource_access"] = introspResp.ResourceAccess
-
-		// Cache the successful result
-		if c.introspectionCache != nil {
-			c.introspectionCache.Set(token, result)
-		}
 	}
 
 	return result, nil

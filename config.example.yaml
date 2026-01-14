@@ -21,14 +21,7 @@ session:
   max_age: 3600  # 1 hour by default
 #  secure: false  # needed on local environment or when no HTTPS enabled
 
-  # Session store: "filesystem" (default), "cookie", "redis"
-  # See THREE-TIER-PLAN.md for details
-  store: "filesystem"
-
-  # Cookie store with introspection (Tier 2)
-#  cookie_introspection: true
-#  introspection_cache_ttl: 15  # seconds
-
-  # Redis store (Tier 3 - not yet implemented)
-#  redis_url: "redis://localhost:6379/0"
+  store: "filesystem"  # "filesystem" (default), "cookie", "redis"
+#  introspection_cache_ttl: 15  # seconds, only for store: "cookie"
+#  redis_url: "redis://localhost:6379/0"  # only for store: "redis"
 
