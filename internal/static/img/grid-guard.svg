@@ -1,0 +1,10 @@
+<svg width="200" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Keycloak Shield Outline -->
+    <path d="M50 5 L85 20 V50 C85 75 50 95 50 95 C50 95 15 75 15 50 V20 L50 5 Z" fill="#2D3E50" stroke="#fff" stroke-width="2"/>
+
+    <!-- App Grid (Visualizing Apps) -->
+    <rect x="32" y="35" width="15" height="15" rx="3" fill="#00B4E0" /> <!-- App 1 -->
+    <rect x="53" y="35" width="15" height="15" rx="3" fill="#ED9C26" /> <!-- App 2 -->
+    <rect x="32" y="56" width="15" height="15" rx="3" fill="#ED9C26" /> <!-- App 3 -->
+    <rect x="53" y="56" width="15" height="15" rx="3" fill="#00B4E0" /> <!-- App 4 -->
+</svg>

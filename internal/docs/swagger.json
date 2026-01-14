@@ -7,7 +7,7 @@
         "description": "This is an example server for a GOTH template application.",
         "title": "GOTH Template API",
         "contact": {
-            "name": "EffiSupport",
+            "name": "Effi-Support",
             "url": "https://www.effiware.com/contact",
             "email": "contact@effiware.com"
         },
@@ -20,9 +20,9 @@
     "host": "localhost:8080",
     "basePath": "/api/v1",
     "paths": {
-        "/clicks": {
+        "/applications": {
             "get": {
-                "description": "Retrieve the total number of clicks recorded in the system",
+                "description": "List assigned applications for the authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,15 +30,14 @@
                     "application/json"
                 ],
                 "tags": [
-                    "clicks"
+                    "applications"
                 ],
-                "summary": "Get the number of clicks",
+                "summary": "List assigned applications",
                 "responses": {}
             }
         },
-        "/clicks/increment": {
-            "post": {
-                "description": "Increment the total number of clicks recorded in the system by one",
+        "/organization": {
+            "get": {
                 "consumes": [
                     "application/json"
                 ],
@@ -46,9 +45,9 @@
                     "application/json"
                 ],
                 "tags": [
-                    "clicks"
+                    "organization"
                 ],
-                "summary": "Increment the number of clicks",
+                "summary": "Get organization",
                 "responses": {}
             }
         }

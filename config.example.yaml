@@ -1,0 +1,27 @@
+organization:
+  name: "Effiware"
+#  custom_description: "Foo <b>Bar</b>"
+  
+keycloak:
+  url: "http://localhost:8082"
+  realm: "cloak-apps-realm"
+  client_id: "cloak-apps-portal"
+  client_secret: "<PASTE_CLIENT_SECRET_FROM_KEYCLOAK>"
+  redirect_uri: "http://localhost:8080/auth/callback"
+
+server:
+  port: 8080
+#  host: "localhost"
+#  timeout: 10
+  log_level: "DEBUG"
+  refresh_interval_min: 5  # 5min by default
+
+session:
+  secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"
+  max_age: 3600  # 1 hour by default
+#  secure: false  # needed on local environment or when no HTTPS enabled
+
+  store: "filesystem"  # "filesystem" (default), "cookie", "redis"
+#  introspection_cache_ttl: 15  # seconds, only for store: "cookie"
+#  redis_url: "redis://localhost:6379/0"  # only for store: "redis"
+

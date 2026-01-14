@@ -2,7 +2,7 @@ package hda
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal/server/http_errors"
@@ -14,7 +14,7 @@ func WithJsonFallback(viewHandler ViewHandlerT) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := viewHandler(w, r)
 		if err != nil {
-			log.Printf("Error: %s", err.Error())
+			slog.Error("ViewHandler reported problem,", "error", err)
 			if clientErr, ok := err.(*http_errors.ClientErr); ok {
 				JsonHandler(w, clientErr.HttpCode, clientErr)
 			} else {
@@ -34,7 +34,7 @@ func JsonHandler(w http.ResponseWriter, code int, payload any) {
 	jsonPay, err := json.Marshal(payload)
 
 	if err != nil {
-		log.Printf("Error when marshaling JSON: %s", err)
+		slog.Error("Error when marshaling JSON,", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

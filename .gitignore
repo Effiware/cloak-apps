@@ -47,4 +47,5 @@ tmp
 node_modules
 *.env
 !.env.example
+config.yaml
 internal/static/css/tailwind.css

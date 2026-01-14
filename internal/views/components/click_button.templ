@@ -1,9 +1,0 @@
-package components
-
-import "github.com/effiware/cloak-apps/internal/server/models"
-
-var clicks *models.Clicks = models.ClicksStore
-
-templ Click() {
-    <p id="parent-click" class="text-xl text-gray-800 mb-3">No of clicks (total): { clicks.GetCount() }</p>
-}

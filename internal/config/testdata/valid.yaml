@@ -1,0 +1,12 @@
+server:
+  port: 8083
+  host: localhost
+  timeout: 15
+
+keycloak:
+  url: https://auth.example.com
+  realm: test-realm
+  client_id: test-client
+
+session:
+  secret: this-is-a-test-secret-with-at-least-32-characters-for-validation

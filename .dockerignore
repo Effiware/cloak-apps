@@ -4,6 +4,8 @@ node_modules
 dist
 bin
 tmp
+seed
+config.example.yaml
 internal/static/css/tailwind.css
 *.log
 *.tmp

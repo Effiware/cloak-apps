@@ -1,0 +1,33 @@
+package components
+
+import (
+	"github.com/effiware/cloak-apps/internal/server/models"
+)
+
+templ AppCard(app models.Application) {
+	<a href={ templ.SafeURL(app.URL) } target="_blank" class="block group">
+		<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28">
+			<div class="flex items-start space-x-3 h-full">
+				<div class="flex-shrink-0">
+					if app.ThumbnailURL != "" {
+						<div class="h-10 w-10 rounded-md flex items-center justify-center overflow-hidden">
+							<img src={ app.ThumbnailURL } alt={ app.Name } class="h-full w-full object-cover"/>
+						</div>
+					} else if app.IconEmoji != "" {
+						<div class="h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+							<span class="text-xl">{ app.IconEmoji }</span>
+						</div>
+					} else {
+						<div class="h-10 w-10 bg-gray-50 dark:bg-gray-700/50 rounded-md flex items-center justify-center">
+							<span class="text-xl">📦</span>
+						</div>
+					}
+				</div>
+				<div class="flex-1 min-w-0 flex flex-col">
+					<h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{ app.Name }</h3>
+					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2" title={ app.Tooltip }>{ app.Description }</p>
+				</div>
+			</div>
+		</div>
+	</a>
+}

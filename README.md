@@ -82,7 +82,7 @@ Either do `make prep` (will also install Go/Node dependencies on the host machin
 
 Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
 
-The port should match the `APP_PORT` in your `.env` file.
+The port should match the `SERVER_PORT` in your `.env` file.
 
 ---
 

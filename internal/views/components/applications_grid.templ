@@ -1,0 +1,169 @@
+package components
+
+import (
+	"github.com/effiware/cloak-apps/internal/server/models"
+	"fmt"
+	"sort"
+)
+
+// SpaceGroup holds applications for a single space
+type SpaceGroup struct {
+	Name string
+	Apps []models.Application
+}
+
+// groupBySpace groups applications by space and returns them in sorted order
+func groupBySpace(apps []models.Application) []SpaceGroup {
+	grouped := make(map[string][]models.Application)
+	for _, app := range apps {
+		space := app.Space
+		if space == "" {
+			space = "other"
+		}
+		grouped[space] = append(grouped[space], app)
+	}
+
+	// Extract and sort space names
+	spaces := make([]string, 0, len(grouped))
+	for space := range grouped {
+		spaces = append(spaces, space)
+	}
+	sort.Strings(spaces)
+
+	// Build sorted result
+	result := make([]SpaceGroup, 0, len(spaces))
+	for _, space := range spaces {
+		result = append(result, SpaceGroup{
+			Name: space,
+			Apps: grouped[space],
+		})
+	}
+	return result
+}
+
+func buildURL(env, view string) string {
+	return fmt.Sprintf("/hda/applications?env=%s&view=%s", env, view)
+}
+
+// ApplicationsGrid renders the applications with environment tabs and view toggle
+// applications: filtered applications to display
+// environments: all available environments (for dynamic tabs)
+// currentEnv: currently selected environment
+// currentView: current view mode (card, list)
+templ ApplicationsGrid(applications []models.Application, environments []string, currentEnv string, currentView string) {
+	<div id="applications-content">
+		<!-- Controls: Environment Filter + View Toggle -->
+		<div class="flex items-start justify-between mb-6">
+			<!-- Environment Filter (dynamic tabs) -->
+			<div>
+				<label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Environment</label>
+				<div class="flex flex-wrap gap-2">
+					for _, env := range environments {
+						@EnvironmentTab(env, currentEnv, currentView)
+					}
+				</div>
+			</div>
+
+			<!-- View Toggle -->
+			<div class="flex items-center space-x-1 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+				@ViewToggleButton("card", currentEnv, currentView)
+				@ViewToggleButton("list", currentEnv, currentView)
+			</div>
+		</div>
+
+		<!-- Applications -->
+		if len(applications) == 0 {
+			@EmptyState(currentEnv)
+		} else if currentView == "list" {
+			@ApplicationsList(applications)
+		} else {
+			@ApplicationsCards(applications)
+		}
+	</div>
+}
+
+templ EnvironmentTab(tabEnv string, currentEnv string, currentView string) {
+	<button
+		hx-get={ buildURL(tabEnv, currentView) }
+		hx-target="#applications-container"
+		hx-swap="innerHTML"
+		hx-indicator="#loading-spinner"
+		class={ "px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize",
+			templ.KV("bg-yellow-600 text-white", tabEnv == currentEnv),
+			templ.KV("bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700", tabEnv != currentEnv) }>
+		{ tabEnv }
+	</button>
+}
+
+templ ViewToggleButton(buttonView string, currentEnv string, currentView string) {
+	<button
+		hx-get={ buildURL(currentEnv, buttonView) }
+		hx-target="#applications-container"
+		hx-swap="innerHTML"
+		hx-indicator="#loading-spinner"
+		class={ "p-1.5 rounded transition-colors",
+			templ.KV("bg-white dark:bg-gray-700 shadow-sm", buttonView == currentView) }
+		title={ fmt.Sprintf("%s view", buttonView) }>
+		if buttonView == "card" {
+			<svg class="h-4 w-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+			</svg>
+		} else {
+			<svg class="h-4 w-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+			</svg>
+		}
+	</button>
+}
+
+templ ApplicationsCards(applications []models.Application) {
+	for _, group := range groupBySpace(applications) {
+		<div class="mb-10">
+			<!-- Space Header -->
+			<h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-wide">{ group.Name }</h2>
+
+			<!-- Applications Grid -->
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+				for _, app := range group.Apps {
+					@AppCard(app)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ ApplicationsList(applications []models.Application) {
+	for _, group := range groupBySpace(applications) {
+		<div class="mb-8">
+			<!-- Space Header -->
+			<h2 class="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">{ group.Name }</h2>
+
+			<!-- Applications List -->
+			<div class="space-y-1">
+				for _, app := range group.Apps {
+					@AppListItem(app)
+				}
+			</div>
+		</div>
+	}
+}
+
+templ EmptyState(env string) {
+	<div class="flex flex-col items-center justify-center py-16 px-4">
+		<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-8 max-w-md text-center">
+			<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
+				<svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+				</svg>
+			</div>
+
+			<h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+				No Applications Found
+			</h3>
+
+			<p class="text-sm text-gray-500 dark:text-gray-400">
+				No applications are available in the { env } environment. Try selecting a different environment.
+			</p>
+		</div>
+	</div>
+}

@@ -1,0 +1,17 @@
+<svg width="400" height="200" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Back Card -->
+    <rect x="35" y="15" width="50" height="60" rx="5" fill="#bbb" transform="rotate(10 60 45)"/>
+
+    <!-- Middle Card -->
+    <rect x="30" y="15" width="50" height="60" rx="5" fill="#999" transform="rotate(5 55 45)"/>
+
+    <!-- Front Card (Main Interface) -->
+    <rect x="25" y="15" width="50" height="60" rx="5" fill="#2D3E50" stroke="#fff" stroke-width="1"/>
+
+    <!-- Keycloak Shield on the Card -->
+    <path d="M50 28 L65 34 V48 C65 58 50 68 50 68 C50 68 35 58 35 48 V34 L50 28 Z" fill="#ED9C26"/>
+
+    <!-- Keyhole -->
+    <circle cx="50" cy="43" r="3" fill="#2D3E50"/>
+    <path d="M50 43 L53 58 H47 L50 43 Z" fill="#2D3E50"/>
+</svg>
