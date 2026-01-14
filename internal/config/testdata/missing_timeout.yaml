@@ -5,3 +5,6 @@ server:
 keycloak:
   url: https://auth.example.com
   realm: test-realm
+
+session:
+  secret: this-is-a-test-secret-with-at-least-32-characters-for-validation

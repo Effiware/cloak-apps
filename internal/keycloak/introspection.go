@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -92,6 +93,7 @@ func (c *Client) introspectToken(ctx context.Context, token string) ([]byte, err
 
 // IntrospectToken returns the introspection result with claims if the token is valid
 func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectionResult, error) {
+	slog.Debug("Introspecting token,", "token[:50]", token[:50])
 	introspBody, err := c.cachedIntrospectToken(ctx, token)
 	if err != nil {
 		return nil, err
