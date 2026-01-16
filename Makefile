@@ -1,13 +1,21 @@
 -include .env
 
 ### Execute on local machine
-.PHONY: prep build-local build test swag templ notify-templ-proxy air
+.PHONY: gen-certs prep build-local build test swag templ notify-templ-proxy air
+
+gen-certs:
+	@openssl req -newkey rsa:2048 -nodes -x509 -days 3650 \
+		-keyout keycloak-server.key.pem \
+		-out keycloak-server.crt.pem \
+		-subj "/CN=localhost" \
+		-addext "subjectAltName=DNS:localhost,DNS:keycloak,IP:127.0.0.1"
 
 prep:
 	@go get -tool github.com/a-h/templ/cmd/templ@latest
 	@go get -tool github.com/air-verse/air@latest
 	@go get -tool github.com/swaggo/swag/cmd/swag@latest
 	@npm install
+	@make gen-certs
 	@cp .env.example .env
 	@cp config.example.yaml config.yaml
 

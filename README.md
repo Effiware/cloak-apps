@@ -49,7 +49,7 @@ Or use Docker 28.1+
 
 2. **Build Tailwind and Go**
    ```bash
-   make build
+   make build-local
    ```
 
 3. **Run the application** with Hot Reload using Air 
@@ -61,20 +61,41 @@ Or use Docker 28.1+
 
 Either do `make prep` (will also install Go/Node dependencies on the host machine) or copy `.env.example` to `.env` and modify as needed.
 
-1. **Build the Docker image**
+1. **Generate certificates**
+   ```bash
+   make gen-certs
+   ```
+
+2. **Build the Docker image**
    ```bash
    make docker-build
    ```
 
-2. **Run the Docker container**
+3. **Run the Docker container**
    ```bash
    make docker-up
    ```
 
-3. **Stop the Docker container**
+4. **Stop the Docker container**
    ```bash
    make docker-down
    ```
+
+### Add hostnames to your local DNS resolver
+
+If you're on Mac or linux simply add below line to your `/etc/hosts`
+
+```txt
+127.0.0.1    keycloak
+```
+
+### Import sample realm
+
+The app as is uses a realm called **cloak-apps-realm**, the easies way to start using the project is to create a new
+realm in Keycloak with the same name and import (seed) the default data from [cloak-apps-realm-export.json](./seed/cloak-apps-realm-export.json)
+
+You should be able to log in to admin console on `https://localhost/admin` - it uses self-signed certificates so you
+have to accept potential risk alert in the browser.
 
 ---
 

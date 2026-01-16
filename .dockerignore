@@ -6,7 +6,10 @@ bin
 tmp
 seed
 config.example.yaml
+config.yaml
 internal/static/css/tailwind.css
+.env.example
+.air.toml
 *.log
 *.tmp
 *.env
