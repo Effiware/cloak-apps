@@ -99,3 +99,17 @@ services:
       - LOG_LEVEL=debug
     networks:
       - cloak-apps-net
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    container_name: cloak-apps-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
+    networks:
+      - cloak-apps-net

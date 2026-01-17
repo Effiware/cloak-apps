@@ -7,15 +7,37 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
+
+var (
+	meter = otel.Meter("cloak-apps")
+
+	cacheOperationsCounter metric.Int64Counter
+)
+
+func init() {
+	var err error
+
+	cacheOperationsCounter, err = meter.Int64Counter(
+		"cache.operations.total",
+		metric.WithDescription("Total number of cache operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create cache operations counter", "error", err)
+	}
+}
 
 // BeforeCallHook is a hook (function) signature that should be called before applying the pattern
 type BeforeCallHook func(ctx context.Context, req *http.Request) error
@@ -141,6 +163,10 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 
 		if time.Now().After(expires) {
 			span.SetAttributes(attribute.String("cache.status", "miss"))
+			cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("cache.status", "miss"),
+				attribute.String("cache.type", "ttl"),
+			))
 			result, err = circuit(ctx)
 			if err == nil {
 				// Move expiration only if no error
@@ -150,6 +176,10 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 		}
 
 		span.SetAttributes(attribute.String("cache.status", "hit"))
+		cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("cache.status", "hit"),
+			attribute.String("cache.type", "ttl"),
+		))
 		return result, err
 	}
 }
@@ -204,6 +234,10 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 
 		if cache == nil || time.Now().After(cache.expires) {
 			span.SetAttributes(attribute.String("cache.status", "miss"))
+			cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("cache.status", "miss"),
+				attribute.String("cache.type", "key_ttl"),
+			))
 			var expires time.Time
 
 			res, err := circuit(ctx, key)
@@ -221,6 +255,10 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 		}
 
 		span.SetAttributes(attribute.String("cache.status", "hit"))
+		cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("cache.status", "hit"),
+			attribute.String("cache.type", "key_ttl"),
+		))
 		return cache.result, cache.err
 	}
 }

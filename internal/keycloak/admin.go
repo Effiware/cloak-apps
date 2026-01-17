@@ -16,12 +16,43 @@ import (
 	"github.com/effiware/cloak-apps/utils"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 )
 
-var tracer = otel.Tracer("cloak-apps")
+var (
+	tracer = otel.Tracer("cloak-apps")
+	meter  = otel.Meter("cloak-apps")
+
+	// Metrics instruments
+	tokenRefreshCounter metric.Int64Counter
+	apiCallDuration     metric.Float64Histogram
+)
+
+func init() {
+	var err error
+
+	tokenRefreshCounter, err = meter.Int64Counter(
+		"keycloak.token.refresh.total",
+		metric.WithDescription("Total number of service account token refresh operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create token refresh counter", "error", err)
+	}
+
+	apiCallDuration, err = meter.Float64Histogram(
+		"keycloak.api.duration",
+		metric.WithDescription("Duration of Keycloak Admin API calls"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		slog.Error("Failed to create API call duration histogram", "error", err)
+	}
+}
 
 const (
 	keycloakDataTTL               = 5 * time.Minute
@@ -158,6 +189,7 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create token request")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to create token request: %w", err)
 	}
 
@@ -167,6 +199,7 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get service account token")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to get service account token: %w", err)
 	}
 	defer resp.Body.Close()
@@ -176,6 +209,7 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 		err := fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "token request failed")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return err
 	}
 
@@ -183,11 +217,13 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to decode token response")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to decode token response: %w", err)
 	}
 
 	ac.setTokenAndExpiry(ctx, &tokenResp, time.Now().Add(time.Duration(tokenResp.ExpiresIn)*time.Second))
 	slog.Debug("Service account token obtained", "expires_in", strconv.Itoa(tokenResp.ExpiresIn/60)+"min")
+	tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 
 	return nil
 }
@@ -245,11 +281,14 @@ func (ac *AdminClient) getClients(ctx context.Context) ([]byte, error) {
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
 	ctx, span := tracer.Start(ctx, "keycloak.GetClients")
 	defer span.End()
+	start := time.Now()
 
 	resBody, err := ac.cachedGetClients(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get clients")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "error")))
 		return nil, err
 	}
 
@@ -257,15 +296,20 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 	if err := json.Unmarshal(resBody, &clients); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to decode clients response")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to decode clients response: %w", err)
 	}
 
+	apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "success")))
 	return clients, nil
 }
 
 func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepresentation, error) {
 	ctx, span := tracer.Start(ctx, "keycloak.GetClientScopes")
 	defer span.End()
+	start := time.Now()
 
 	scopesURL := fmt.Sprintf("%s/admin/realms/%s/client-scopes", ac.BaseURL, ac.Realm)
 
@@ -273,6 +317,8 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create client scopes request")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to create client scopes request: %w", err)
 	}
 
@@ -282,6 +328,8 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to get client scopes")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, err
 	}
 
@@ -289,9 +337,13 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 	if err := json.Unmarshal(resBody, &scopes); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to decode client scopes response")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to decode client scopes response: %w", err)
 	}
 
+	apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "success")))
 	return scopes, nil
 }
 
