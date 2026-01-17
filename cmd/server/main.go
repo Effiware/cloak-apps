@@ -16,6 +16,7 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/effiware/cloak-apps/internal/services"
+	"github.com/effiware/cloak-apps/utils"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
@@ -113,6 +114,7 @@ func main() {
 		prometheusExporter, err := otelprometheus.New(
 			otelprometheus.WithRegisterer(prometheusRegistry),
 			otelprometheus.WithoutScopeInfo(),
+			otelprometheus.WithNamespace("cloakapps"),
 		)
 		if err != nil {
 			slog.Error("Failed to create Prometheus exporter,", "error", err)
@@ -126,6 +128,13 @@ func main() {
 
 		// Set it as the global meter provider
 		otel.SetMeterProvider(meterProvider)
+
+		// Initialize metrics instruments now that MeterProvider is set
+		keycloak.InitAdminMetrics()
+		keycloak.InitIntrospectionMetrics()
+		services.InitApplicationMetrics()
+		utils.InitCacheMetrics()
+
 		slog.Info("Prometheus MeterProvider initialized")
 	}
 

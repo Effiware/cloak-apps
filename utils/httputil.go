@@ -21,12 +21,13 @@ import (
 )
 
 var (
-	meter = otel.Meter("cloak-apps")
-
+	// Metrics instruments (initialized via InitCacheMetrics after MeterProvider is set)
 	cacheOperationsCounter metric.Int64Counter
 )
 
-func init() {
+// InitCacheMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitCacheMetrics() {
+	meter := otel.Meter("cloak-apps")
 	var err error
 
 	cacheOperationsCounter, err = meter.Int64Counter(

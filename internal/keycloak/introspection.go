@@ -19,16 +19,17 @@ import (
 )
 
 var (
-	introspectionMeter = otel.Meter("cloak-apps")
-
+	// Metrics instruments (initialized via InitIntrospectionMetrics after MeterProvider is set)
 	introspectionCounter  metric.Int64Counter
 	introspectionDuration metric.Float64Histogram
 )
 
-func init() {
+// InitIntrospectionMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitIntrospectionMetrics() {
+	meter := otel.Meter("cloak-apps")
 	var err error
 
-	introspectionCounter, err = introspectionMeter.Int64Counter(
+	introspectionCounter, err = meter.Int64Counter(
 		"keycloak.introspection.total",
 		metric.WithDescription("Total number of token introspection operations"),
 		metric.WithUnit("{operation}"),
@@ -37,7 +38,7 @@ func init() {
 		slog.Error("Failed to create introspection counter", "error", err)
 	}
 
-	introspectionDuration, err = introspectionMeter.Float64Histogram(
+	introspectionDuration, err = meter.Float64Histogram(
 		"keycloak.introspection.duration",
 		metric.WithDescription("Duration of token introspection operations"),
 		metric.WithUnit("s"),

@@ -25,14 +25,15 @@ import (
 
 var (
 	tracer = otel.Tracer("cloak-apps")
-	meter  = otel.Meter("cloak-apps")
 
-	// Metrics instruments
+	// Metrics instruments (initialized via InitAdminMetrics after MeterProvider is set)
 	tokenRefreshCounter metric.Int64Counter
 	apiCallDuration     metric.Float64Histogram
 )
 
-func init() {
+// InitAdminMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitAdminMetrics() {
+	meter := otel.Meter("cloak-apps")
 	var err error
 
 	tokenRefreshCounter, err = meter.Int64Counter(

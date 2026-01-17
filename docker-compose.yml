@@ -87,8 +87,8 @@ services:
     image: jaegertracing/jaeger:2.14.1
     container_name: cloak-apps-jaeger
     restart: unless-stopped
-#    profiles:
-#      - whole
+    profiles:
+      - whole
     depends_on:
       - keycloak
     ports:
@@ -104,6 +104,8 @@ services:
     image: prom/prometheus:v3.4.0
     container_name: cloak-apps-prometheus
     restart: unless-stopped
+    profiles:
+      - whole
     ports:
       - "${PROMETHEUS_PORT}:9090"
     volumes:

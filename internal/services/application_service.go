@@ -18,13 +18,15 @@ import (
 
 var (
 	tracer = otel.Tracer("cloak-apps") //nolint:gochecknoglobals
-	meter  = otel.Meter("cloak-apps")  //nolint:gochecknoglobals
 
+	// Metrics instruments (initialized via InitApplicationMetrics after MeterProvider is set)
 	applicationsFetchDuration metric.Float64Histogram
 	applicationsFetchCounter  metric.Int64Counter
 )
 
-func init() {
+// InitApplicationMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitApplicationMetrics() {
+	meter := otel.Meter("cloak-apps")
 	var err error
 
 	applicationsFetchDuration, err = meter.Float64Histogram(

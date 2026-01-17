@@ -20,6 +20,7 @@ Cloak Apps serves as a centralized hub where users can access all applications t
 - [x] Card and list view modes
 - [x] Type-safe templates with Templ
 - [x] Hypermedia-driven architecture with HTMX
+- [x] OpenTelemetry tracing and Prometheus metrics (`/metrics`)
 
 Built from the [Effiware GOTH template](https://github.com/Effiware/goth-template).
 
@@ -97,13 +98,19 @@ realm in Keycloak with the same name and import (seed) the default data from [cl
 You should be able to log in to admin console on `https://localhost/admin` - it uses self-signed certificates so you
 have to accept potential risk alert in the browser.
 
+Detailed information is available in [KEYCLOAK_CONFIGURATION.md](./KEYCLOAK_CONFIGURATION.md)
+
 ---
 
 ## Access the Application
 
-Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
+In `.env` file there are port overwrites with the default setup. You shouldn't need to change them but there is always
+a possibility to do so.
 
-The port should match the `SERVER_PORT` in your `.env` file.
+Docker Compose includes Keycloak, Jaeger and Prometheus. Access them at `https://localhost`, `http://localhost:8083`
+and `http://localhost:8084` respectively
+
+Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
 
 ---
 

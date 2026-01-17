@@ -4,14 +4,13 @@ global:
 
 scrape_configs:
   # Prometheus self-monitoring
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
+#  - job_name: 'prometheus'
+#    static_configs:
+#      - targets: ['localhost:9090']
 
   # Cloak Apps metrics
   - job_name: 'cloak-apps'
     static_configs:
       - targets: ['cloak-apps:8080']
-#      - targets: ['host.docker.internal:8080']
     metrics_path: /metrics
     scrape_interval: 10s
