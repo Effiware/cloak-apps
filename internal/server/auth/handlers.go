@@ -10,8 +10,13 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/session"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/oauth2"
 )
+
+var tracer = otel.Tracer("cloak-apps")
 
 type Handlers struct {
 	keycloakClient *keycloak.Client
@@ -51,9 +56,14 @@ func (h *Handlers) HandleLogin(w http.ResponseWriter, r *http.Request) {
 
 // HandleCallback processes OAuth2 callback
 func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "auth.Callback")
+	defer span.End()
+
 	// Verify state parameter
 	sess, err := h.sessionStore.Get(r, session.SessionName)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid session")
 		slog.Error("Failed to get session,", "error", err)
 		http.Error(w, "Invalid session", http.StatusBadRequest)
 		return
@@ -61,6 +71,7 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	savedState, ok := sess.Values["oauth_state"].(string)
 	if !ok || savedState == "" {
+		span.AddEvent("oauth.state_missing")
 		slog.Error("Failed to get saved state")
 		http.Error(w, "Missing state", http.StatusBadRequest)
 		return
@@ -68,6 +79,7 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 
 	receivedState := r.URL.Query().Get("state")
 	if receivedState != savedState {
+		span.AddEvent("oauth.state_mismatch")
 		slog.Error("Received state doesn't match saved state")
 		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
@@ -76,6 +88,7 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Clear state from session
 	delete(sess.Values, "oauth_state")
 	if err := sess.Save(r, w); err != nil {
+		span.RecordError(err)
 		slog.Error("Failed to save state after deletion,", "error", err)
 		http.Error(w, "Failed to save state after deletion", http.StatusBadRequest)
 		return
@@ -84,6 +97,11 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Check for error from Keycloak
 	if errorParam := r.URL.Query().Get("error"); errorParam != "" {
 		errorDesc := r.URL.Query().Get("error_description")
+		span.SetAttributes(
+			attribute.String("oauth.error", errorParam),
+			attribute.String("oauth.error_description", errorDesc),
+		)
+		span.SetStatus(codes.Error, "OAuth error from Keycloak")
 		slog.Error("OAuth,", "error", errorParam, "description", errorDesc)
 		http.Error(w, fmt.Sprintf("Authentication failed: %s", errorDesc), http.StatusUnauthorized)
 		return
@@ -92,23 +110,30 @@ func (h *Handlers) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	// Exchange code for token
 	code := r.URL.Query().Get("code")
 	if code == "" {
+		span.AddEvent("oauth.code_missing")
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
 		return
 	}
 
-	token, err := h.keycloakClient.OAuth2Config.Exchange(r.Context(), code)
+	span.AddEvent("oauth.code_exchange")
+	token, err := h.keycloakClient.OAuth2Config.Exchange(ctx, code)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "code exchange failed")
 		slog.Error("Failed to exchange code for token,", "error", err)
 		http.Error(w, "Failed to authenticate", http.StatusInternalServerError)
 		return
 	}
 
 	if err := h.sessionStore.SaveToken(w, r, token); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to save token")
 		slog.Error("Failed to save token,", "error", err)
 		http.Error(w, "Failed to save session", http.StatusInternalServerError)
 		return
 	}
 
+	span.AddEvent("auth.login_successful")
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -140,9 +165,13 @@ func (h *Handlers) HandleLogout(w http.ResponseWriter, r *http.Request) {
 
 // HandleSSORedirect redirects user to specific client's SSO login
 func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "auth.SSORedirect")
+	defer span.End()
+
 	// Get authenticated user from context (guaranteed to exist due to AuthRequired middleware)
 	userInfo, ok := middlewares.GetUserFromContext(r.Context())
 	if !ok {
+		span.AddEvent("auth.user_context_missing")
 		slog.Error("User context not found in SSO redirect")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -150,14 +179,22 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 
 	clientID := r.URL.Query().Get("client")
 	if clientID == "" {
+		span.AddEvent("sso.client_param_missing")
 		slog.Error("Missing client parameter")
 		http.Error(w, "Missing client parameter", http.StatusBadRequest)
 		return
 	}
 
+	span.SetAttributes(
+		attribute.String("sso.target_client", clientID),
+		attribute.String("user.sub", userInfo.Sub),
+	)
+
 	// Security: Validate that the user has access to this client
 	userRoles, hasAccess := userInfo.ClientRoles[clientID]
 	if !hasAccess || len(userRoles) == 0 {
+		span.AddEvent("auth.access_denied")
+		span.SetStatus(codes.Error, "user has no access to client")
 		slog.Warn("SSO redirect denied - user has no access to client",
 			"user", userInfo.PreferredUsername,
 			"client", clientID)
@@ -168,6 +205,8 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 	// CSRF Protection: Generate state parameter
 	state, err := generateRandomState()
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to generate state")
 		slog.Error("Failed to generate state for SSO redirect,", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -178,6 +217,8 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 	sess.Values["sso_state"] = state
 	sess.Values["sso_target_client"] = clientID
 	if err := sess.Save(r, w); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to save session")
 		slog.Error("Failed to save SSO session state,", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
@@ -187,6 +228,7 @@ func (h *Handlers) HandleSSORedirect(w http.ResponseWriter, r *http.Request) {
 	authURL := fmt.Sprintf("%s/protocol/openid-connect/auth?client_id=%s&response_type=code&state=%s",
 		h.keycloakClient.IssuerURL, clientID, state)
 
+	span.AddEvent("sso.redirect_granted")
 	slog.Debug("SSO redirect granted",
 		"user", userInfo.PreferredUsername,
 		"client", clientID,

@@ -12,7 +12,41 @@ import (
 	"time"
 
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 )
+
+var (
+	// Metrics instruments (initialized via InitIntrospectionMetrics after MeterProvider is set)
+	introspectionCounter  metric.Int64Counter
+	introspectionDuration metric.Float64Histogram
+)
+
+// InitIntrospectionMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitIntrospectionMetrics() {
+	meter := otel.Meter("cloak-apps")
+	var err error
+
+	introspectionCounter, err = meter.Int64Counter(
+		"keycloak.introspection.total",
+		metric.WithDescription("Total number of token introspection operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create introspection counter", "error", err)
+	}
+
+	introspectionDuration, err = meter.Float64Histogram(
+		"keycloak.introspection.duration",
+		metric.WithDescription("Duration of token introspection operations"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		slog.Error("Failed to create introspection duration histogram", "error", err)
+	}
+}
 
 // IntrospectionResponse represents the response from Keycloak's introspection endpoint
 // See RFC 7662: https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
@@ -93,16 +127,44 @@ func (c *Client) introspectToken(ctx context.Context, token string) ([]byte, err
 
 // IntrospectToken returns the introspection result with claims if the token is valid
 func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectionResult, error) {
+	ctx, span := tracer.Start(ctx, "keycloak.IntrospectToken")
+	defer span.End()
+	start := time.Now()
+
 	slog.Debug("Introspecting token,", "token[:50]", token[:50])
 	introspBody, err := c.cachedIntrospectToken(ctx, token)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "introspection failed")
+		introspectionCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+		introspectionDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("status", "error")))
 		return nil, err
 	}
 
 	var introspResp IntrospectionResponse
 	if err := json.Unmarshal(introspBody, &introspResp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to decode introspection response")
+		introspectionCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+		introspectionDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to decode introspection response: %w", err)
 	}
+
+	span.SetAttributes(attribute.Bool("token.active", introspResp.Active))
+
+	// Record metrics based on token active status
+	activeStr := "inactive"
+	if introspResp.Active {
+		activeStr = "active"
+	}
+	introspectionCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("status", "success"),
+		attribute.String("token.active", activeStr),
+	))
+	introspectionDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("status", "success")))
 
 	result := &IntrospectionResult{
 		Active: introspResp.Active,
@@ -120,6 +182,8 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 		result.Claims["email_verified"] = introspResp.EmailVerified
 		result.Claims["realm_access"] = introspResp.RealmAccess
 		result.Claims["resource_access"] = introspResp.ResourceAccess
+
+		span.SetAttributes(attribute.String("user.sub", introspResp.Sub))
 	}
 
 	return result, nil

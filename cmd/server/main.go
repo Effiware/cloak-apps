@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/effiware/cloak-apps/internal/config"
@@ -12,7 +16,31 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/effiware/cloak-apps/internal/services"
+	"github.com/effiware/cloak-apps/utils"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
+
+const (
+	serviceName    = "cloak-apps"
+	serviceVersion = "0.0.1"
+)
+
+// getContainerID returns the HOSTNAME env var (container ID in K8s/Docker)
+func getContainerID() string {
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		return hostname
+	}
+	return serviceName + "-local"
+}
 
 func main() {
 	cfg, err := config.LoadConfig()
@@ -30,9 +58,88 @@ func main() {
 	}
 	slog.Info("Initialized slog with", "level", level)
 
-	ctx := context.Background()
+	// Create shared OTel resource for both tracing and metrics
+	otelResource := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceNameKey.String(serviceName),
+		semconv.ServiceVersionKey.String(serviceVersion),
+		semconv.TelemetrySDKLanguageGo,
+		semconv.TelemetrySDKNameKey.String("opentelemetry"),
+		semconv.TelemetrySDKVersionKey.String("1.26.0"),
+		semconv.DeploymentEnvironmentKey.String(cfg.Otlp.Environment),
+		semconv.ContainerIDKey.String(getContainerID()),
+	)
+
+	// Initialize TracerProvider (stored for graceful shutdown)
+	var tracerProvider *sdktrace.TracerProvider
+	if cfg.Otlp.Url != "" {
+		otlpHttpHeaders := map[string]string{
+			"content-type": "application/json",
+		}
+		otlpClientOpts := []otlptracehttp.Option{
+			otlptracehttp.WithEndpoint(cfg.Otlp.Url),
+			otlptracehttp.WithHeaders(otlpHttpHeaders),
+		}
+		if !cfg.Otlp.Secure {
+			otlpClientOpts = append(otlpClientOpts, otlptracehttp.WithInsecure())
+		}
+
+		otlpHttpExporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient(otlpClientOpts...))
+		if err != nil {
+			slog.Error("Failed to create OTLP trace exporter,", "error", err)
+			os.Exit(1)
+		}
+
+		tracerProvider = sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(
+				otlpHttpExporter,
+				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
+				sdktrace.WithBatchTimeout(sdktrace.DefaultScheduleDelay*time.Millisecond),
+				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
+			),
+			sdktrace.WithResource(otelResource),
+		)
+
+		// Set it as the global trace provider
+		otel.SetTracerProvider(tracerProvider)
+		slog.Info("OTLP Trace Provider initialized,", "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure)
+	}
+
+	// Initialize MeterProvider with Prometheus exporter (stored for graceful shutdown)
+	var meterProvider *sdkmetric.MeterProvider
+	var prometheusRegistry *prometheus.Registry
+	if cfg.Metrics.Enabled {
+		prometheusRegistry = prometheus.NewRegistry()
+
+		prometheusExporter, err := otelprometheus.New(
+			otelprometheus.WithRegisterer(prometheusRegistry),
+			otelprometheus.WithoutScopeInfo(),
+			otelprometheus.WithNamespace("cloakapps"),
+		)
+		if err != nil {
+			slog.Error("Failed to create Prometheus exporter,", "error", err)
+			os.Exit(1)
+		}
+
+		meterProvider = sdkmetric.NewMeterProvider(
+			sdkmetric.WithResource(otelResource),
+			sdkmetric.WithReader(prometheusExporter),
+		)
+
+		// Set it as the global meter provider
+		otel.SetMeterProvider(meterProvider)
+
+		// Initialize metrics instruments now that MeterProvider is set
+		keycloak.InitAdminMetrics()
+		keycloak.InitIntrospectionMetrics()
+		services.InitApplicationMetrics()
+		utils.InitCacheMetrics()
+
+		slog.Info("Prometheus MeterProvider initialized")
+	}
+
 	keycloakClient, err := keycloak.NewClient(
-		ctx,
+		context.Background(),
 		cfg.Keycloak.Url,
 		cfg.Keycloak.Realm,
 		cfg.Keycloak.ClientId,
@@ -95,14 +202,64 @@ func main() {
 		sessionStore,
 		orgService,
 		appService,
+		prometheusRegistry,
 	)
 
 	slog.Info("Starting server,", "address", httpServer.Addr)
 	slog.Info("Keycloak", "URL", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
 	slog.Info("Redirect", "URI", cfg.Keycloak.RedirectUri)
 
-	if err := httpServer.ListenAndServe(); err != nil {
-		slog.Error("Starting server failed", "error", err)
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	// Wait for interrupt signal or server error
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErr:
+		slog.Error("Server failed to start", "error", err)
 		os.Exit(1)
+	case sig := <-quit:
+		slog.Info("Received shutdown signal", "signal", sig)
 	}
+
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	slog.Info("Shutting down HTTP server...")
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP server shutdown error", "error", err)
+	} else {
+		slog.Info("HTTP server shutdown complete")
+	}
+
+	// Shutdown MeterProvider after server (flushes pending metrics)
+	if meterProvider != nil {
+		slog.Info("Shutting down MeterProvider...")
+		if err := meterProvider.Shutdown(shutdownCtx); err != nil {
+			slog.Error("MeterProvider shutdown error", "error", err)
+		} else {
+			slog.Info("MeterProvider shutdown complete")
+		}
+	}
+
+	// Shutdown TracerProvider after server (flushes pending spans)
+	if tracerProvider != nil {
+		slog.Info("Shutting down TracerProvider...")
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			slog.Error("TracerProvider shutdown error", "error", err)
+		} else {
+			slog.Info("TracerProvider shutdown complete")
+		}
+	}
+
+	slog.Info("Graceful shutdown complete")
 }

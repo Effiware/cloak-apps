@@ -14,8 +14,46 @@ import (
 	"time"
 
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 )
+
+var (
+	tracer = otel.Tracer("cloak-apps")
+
+	// Metrics instruments (initialized via InitAdminMetrics after MeterProvider is set)
+	tokenRefreshCounter metric.Int64Counter
+	apiCallDuration     metric.Float64Histogram
+)
+
+// InitAdminMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitAdminMetrics() {
+	meter := otel.Meter("cloak-apps")
+	var err error
+
+	tokenRefreshCounter, err = meter.Int64Counter(
+		"keycloak.token.refresh.total",
+		metric.WithDescription("Total number of service account token refresh operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create token refresh counter", "error", err)
+	}
+
+	apiCallDuration, err = meter.Float64Histogram(
+		"keycloak.api.duration",
+		metric.WithDescription("Duration of Keycloak Admin API calls"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		slog.Error("Failed to create API call duration histogram", "error", err)
+	}
+}
 
 const (
 	keycloakDataTTL               = 5 * time.Minute
@@ -92,7 +130,7 @@ func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient 
 		ClientSecret: clientSecret,
 		httpClient: &http.Client{
 			Timeout:   30 * time.Second,
-			Transport: transport,
+			Transport: otelhttp.NewTransport(transport),
 		},
 	}
 
@@ -103,7 +141,10 @@ func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient 
 
 // setTokenAndExpiry is a helper function to set new token and tokenExpiry in a thread-safe manner
 func (ac *AdminClient) setTokenAndExpiry(ctx context.Context, tr *TokenResponse, te time.Time) {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("mutex.write_lock.acquiring")
+	defer span.AddEvent("mutex.write_lock.released")
+
 	ac.tokenMutex.Lock()
 	defer ac.tokenMutex.Unlock()
 	ac.token = tr
@@ -112,21 +153,32 @@ func (ac *AdminClient) setTokenAndExpiry(ctx context.Context, tr *TokenResponse,
 
 // getToken is a helper function to obtain current token in a thread-safe manner
 func (ac *AdminClient) getToken(ctx context.Context) *TokenResponse {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("mutex.read_lock.acquiring")
+	defer span.AddEvent("mutex.read_lock.released")
+
 	ac.tokenMutex.RLock()
 	defer ac.tokenMutex.RUnlock()
+
 	return ac.token
 }
 
 // getTokenAndTokenExpiry is a helper function to obtain current token and tokenExpiry in a thread-safe manner
 func (ac *AdminClient) getTokenAndTokenExpiry(ctx context.Context) (*TokenResponse, time.Time) {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("mutex.read_lock.acquiring")
+	defer span.AddEvent("mutex.read_lock.released")
+
 	ac.tokenMutex.RLock()
 	defer ac.tokenMutex.RUnlock()
+
 	return ac.token, ac.tokenExpiry
 }
 
 func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "keycloak.GetServiceAccountToken")
+	defer span.End()
+
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", ac.BaseURL, ac.Realm)
 
 	data := url.Values{}
@@ -136,6 +188,9 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 
 	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create token request")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to create token request: %w", err)
 	}
 
@@ -143,22 +198,33 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 
 	resp, err := ac.httpClient.Do(req)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get service account token")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to get service account token: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "token request failed")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+		return err
 	}
 
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to decode token response")
+		tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
 		return fmt.Errorf("failed to decode token response: %w", err)
 	}
 
 	ac.setTokenAndExpiry(ctx, &tokenResp, time.Now().Add(time.Duration(tokenResp.ExpiresIn)*time.Second))
 	slog.Debug("Service account token obtained", "expires_in", strconv.Itoa(tokenResp.ExpiresIn/60)+"min")
+	tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 
 	return nil
 }
@@ -214,24 +280,46 @@ func (ac *AdminClient) getClients(ctx context.Context) ([]byte, error) {
 }
 
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
+	ctx, span := tracer.Start(ctx, "keycloak.GetClients")
+	defer span.End()
+	start := time.Now()
+
 	resBody, err := ac.cachedGetClients(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get clients")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "error")))
 		return nil, err
 	}
 
 	var clients []ClientRepresentation
 	if err := json.Unmarshal(resBody, &clients); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to decode clients response")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to decode clients response: %w", err)
 	}
 
+	apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("operation", "get_clients"), attribute.String("status", "success")))
 	return clients, nil
 }
 
 func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepresentation, error) {
+	ctx, span := tracer.Start(ctx, "keycloak.GetClientScopes")
+	defer span.End()
+	start := time.Now()
+
 	scopesURL := fmt.Sprintf("%s/admin/realms/%s/client-scopes", ac.BaseURL, ac.Realm)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", scopesURL, nil)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to create client scopes request")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to create client scopes request: %w", err)
 	}
 
@@ -239,14 +327,24 @@ func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepres
 		ctx, req, []int{http.StatusUnauthorized}, 1, ac.setFreshBearerToken, ac.httpClient,
 	)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get client scopes")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, err
 	}
 
 	var scopes []ClientScopeRepresentation
 	if err := json.Unmarshal(resBody, &scopes); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to decode client scopes response")
+		apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to decode client scopes response: %w", err)
 	}
 
+	apiCallDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("operation", "get_client_scopes"), attribute.String("status", "success")))
 	return scopes, nil
 }
 

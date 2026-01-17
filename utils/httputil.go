@@ -7,11 +7,38 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var (
+	// Metrics instruments (initialized via InitCacheMetrics after MeterProvider is set)
+	cacheOperationsCounter metric.Int64Counter
+)
+
+// InitCacheMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitCacheMetrics() {
+	meter := otel.Meter("cloak-apps")
+	var err error
+
+	cacheOperationsCounter, err = meter.Int64Counter(
+		"cache.operations.total",
+		metric.WithDescription("Total number of cache operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create cache operations counter", "error", err)
+	}
+}
 
 // BeforeCallHook is a hook (function) signature that should be called before applying the pattern
 type BeforeCallHook func(ctx context.Context, req *http.Request) error
@@ -52,6 +79,8 @@ func SendRetryableRequest(
 	hook BeforeCallHook,
 	client *http.Client,
 ) ([]byte, error) {
+	span := trace.SpanFromContext(ctx)
+
 	if len(retriableStatuses) == 0 {
 		return nil, fmt.Errorf("you must provide at least one retriable status code")
 	}
@@ -66,20 +95,33 @@ func SendRetryableRequest(
 		client = http.DefaultClient
 	}
 	for next := true; next; next = retryNum <= maxRetryTimes && slices.Contains(retriableStatuses, statusCode) {
+		if retryNum > 0 {
+			span.AddEvent("http.retry", trace.WithAttributes(
+				attribute.Int("retry.attempt", retryNum),
+				attribute.Int("http.response.status_code", statusCode),
+			))
+		}
+
 		// Operate on a request (deep) copy
 		reqCopy, err := deepCopyRequest(ctx, req)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to copy request")
 			return nil, err
 		}
 
 		if hook != nil {
 			if err := hook(ctx, reqCopy); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "hook failed")
 				return nil, err
 			}
 		}
 
 		resp, err := client.Do(reqCopy)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "request failed")
 			return nil, fmt.Errorf("failed to execute request: %w", err)
 		}
 
@@ -87,17 +129,24 @@ func SendRetryableRequest(
 		resBody, err = io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to read response")
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 
 		if statusCode == http.StatusOK {
+			span.SetAttributes(attribute.Int("http.retry_count", retryNum))
 			return resBody, nil
 		}
 
 		retryNum++
 	}
 
-	return nil, fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
+	err := fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
+	span.RecordError(err)
+	span.SetStatus(codes.Error, "max retries exceeded")
+	span.SetAttributes(attribute.Int("http.retry_count", retryNum))
+	return nil, err
 }
 
 // CacheFirstTTL tracks last time it was called and returns a cached result until ttl expires
@@ -108,17 +157,30 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 	var m sync.Mutex
 
 	return func(ctx context.Context) ([]byte, error) {
+		span := trace.SpanFromContext(ctx)
+
 		m.Lock()
 		defer m.Unlock()
 
 		if time.Now().After(expires) {
+			span.SetAttributes(attribute.String("cache.status", "miss"))
+			cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("cache.status", "miss"),
+				attribute.String("cache.type", "ttl"),
+			))
 			result, err = circuit(ctx)
 			if err == nil {
 				// Move expiration only if no error
 				expires = time.Now().Add(ttl)
 			}
+			return result, err
 		}
 
+		span.SetAttributes(attribute.String("cache.status", "hit"))
+		cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("cache.status", "hit"),
+			attribute.String("cache.type", "ttl"),
+		))
 		return result, err
 	}
 }
@@ -161,6 +223,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 	}()
 
 	return func(ctx context.Context, key string) ([]byte, error) {
+		span := trace.SpanFromContext(ctx)
 		_key := key
 		if hashKeys {
 			_key = hashKey(key)
@@ -171,6 +234,11 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 		cache := results[_key]
 
 		if cache == nil || time.Now().After(cache.expires) {
+			span.SetAttributes(attribute.String("cache.status", "miss"))
+			cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("cache.status", "miss"),
+				attribute.String("cache.type", "key_ttl"),
+			))
 			var expires time.Time
 
 			res, err := circuit(ctx, key)
@@ -187,6 +255,11 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 			return res, err
 		}
 
+		span.SetAttributes(attribute.String("cache.status", "hit"))
+		cacheOperationsCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("cache.status", "hit"),
+			attribute.String("cache.type", "key_ttl"),
+		))
 		return cache.result, cache.err
 	}
 }

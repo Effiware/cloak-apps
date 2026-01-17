@@ -10,6 +10,8 @@ import (
 	mw "github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/riandyrn/otelchi"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -17,7 +19,15 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
 	r.Use(middleware.Logger)
+
+	// Metrics endpoint (public, secured via K8s NetworkPolicy)
+	if hdaAndApi.prometheusRegistry != nil {
+		r.Handle("/metrics", promhttp.HandlerFor(hdaAndApi.prometheusRegistry, promhttp.HandlerOpts{
+			EnableOpenMetrics: true,
+		}))
+	}
 
 	// Public routes
 	r.Handle("/docs/*", http.FileServer(http.FS(internal.DocsFS)))

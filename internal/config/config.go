@@ -40,6 +40,16 @@ type Config struct {
 		HomeUrl           string `mapstructure:"home_url"`
 		CustomDescription string `mapstructure:"custom_description"`
 	} `mapstructure:"organization"`
+
+	Otlp struct {
+		Url         string `mapstructure:"url"`
+		Secure      bool   `mapstructure:"secure"`
+		Environment string `mapstructure:"environment"`
+	} `mapstructure:"otlp"`
+
+	Metrics struct {
+		Enabled bool `mapstructure:"enabled"`
+	} `mapstructure:"metrics"`
 }
 
 // LoadConfig reads and validates configuration
@@ -59,6 +69,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("session.introspection_cache_ttl", 15)
 	viper.SetDefault("organization.name", "Effiware")
 	viper.SetDefault("organization.home_url", "https://effiware.com")
+	viper.SetDefault("otlp.secure", true)
+	viper.SetDefault("otlp.environment", "development")
+	viper.SetDefault("metrics.enabled", false)
 
 	// env overrides
 	viper.SetEnvPrefix("CLOAKAPPS")
@@ -71,6 +84,10 @@ func LoadConfig() (*Config, error) {
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
+	}
+
+	if err := config.Sanitize(); err != nil {
 		return nil, err
 	}
 
@@ -121,5 +138,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("session.introspection_cache_ttl must be positive")
 	}
 
+	return nil
+}
+
+func (c *Config) Sanitize() error {
+	c.Otlp.Url = strings.TrimPrefix(c.Otlp.Url, "https://")
+	c.Otlp.Url = strings.TrimPrefix(c.Otlp.Url, "http://")
 	return nil
 }

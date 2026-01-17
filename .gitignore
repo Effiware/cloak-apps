@@ -49,3 +49,4 @@ node_modules
 !.env.example
 config.yaml
 internal/static/css/tailwind.css
+*.pem

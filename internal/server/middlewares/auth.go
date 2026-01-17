@@ -8,7 +8,13 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/mitchellh/mapstructure"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var tracer = otel.Tracer("cloak-apps")
 
 type contextKey string
 
@@ -48,12 +54,23 @@ type UserInfo struct {
 func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, span := tracer.Start(r.Context(), "auth.ValidateToken")
+			defer span.End()
+
+			authMethod := "jwt"
+			if keycloakClient.IsIntrospectionEnabled() {
+				authMethod = "introspection"
+			}
+			span.SetAttributes(attribute.String("auth.method", authMethod))
+
 			token, err := sessionStore.GetToken(r)
 			if err != nil {
+				span.AddEvent("session.token_missing", trace.WithAttributes(attribute.String("reason", "error")))
 				slog.Warn("Failed to obtain token from the session store, redirecting to the login page")
 				redirectToLogin(w, r)
 				return
 			} else if token == nil {
+				span.AddEvent("session.token_missing", trace.WithAttributes(attribute.String("reason", "not_present")))
 				slog.Info("Token not present in the session store, redirecting to login page")
 				redirectToLogin(w, r)
 				return
@@ -65,14 +82,17 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				// Tier 2: Token introspection for CookieStore, traditional JWT verification for others
 				accessToken := token.AccessToken
 				if accessToken == "" {
+					span.AddEvent("token.access_token_missing")
 					slog.Warn("No access_token in session, redirecting to login page")
 					sessionStore.Clear(w, r)
 					redirectToLogin(w, r)
 					return
 				}
 
-				result, err := keycloakClient.IntrospectToken(r.Context(), accessToken)
+				result, err := keycloakClient.IntrospectToken(ctx, accessToken)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "introspection failed")
 					slog.Error("Token introspection failed, redirecting to login page", "error", err)
 					sessionStore.Clear(w, r)
 					redirectToLogin(w, r)
@@ -80,6 +100,7 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				}
 
 				if !result.Active {
+					span.AddEvent("token.inactive")
 					slog.Warn("Token is not active (expired or revoked), redirecting to login page")
 					sessionStore.Clear(w, r)
 					redirectToLogin(w, r)
@@ -91,11 +112,14 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 			} else {
 				// Tier 1: Token refresh + JWT verification
 				if !token.Valid() {
+					span.AddEvent("token.refresh_needed")
 					slog.Info("Token expired, refreshing using refresh_token")
 
-					tokenSource := keycloakClient.OAuth2Config.TokenSource(r.Context(), token)
+					tokenSource := keycloakClient.OAuth2Config.TokenSource(ctx, token)
 					newToken, err := tokenSource.Token()
 					if err != nil {
+						span.RecordError(err)
+						span.SetStatus(codes.Error, "token refresh failed")
 						slog.Warn("Token refresh failed, redirecting to login page", "error", err)
 						sessionStore.Clear(w, r)
 						redirectToLogin(w, r)
@@ -103,12 +127,15 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 					}
 
 					if err := sessionStore.SaveToken(w, r, newToken); err != nil {
+						span.RecordError(err)
+						span.SetStatus(codes.Error, "failed to save refreshed token")
 						slog.Error("Failed to save refreshed token to session", "error", err)
 						sessionStore.Clear(w, r)
 						redirectToLogin(w, r)
 						return
 					}
 
+					span.AddEvent("token.refreshed")
 					slog.Debug("Token successfully refreshed")
 					token = newToken
 				}
@@ -116,14 +143,17 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				// Get ID token from oauth2 token
 				rawIDToken, ok := token.Extra("id_token").(string)
 				if !ok {
+					span.AddEvent("token.id_token_missing")
 					slog.Warn("No id_token, redirecting to the login page")
 					sessionStore.Clear(w, r)
 					redirectToLogin(w, r)
 					return
 				}
 
-				idToken, err := keycloakClient.Verifier.Verify(r.Context(), rawIDToken)
+				idToken, err := keycloakClient.Verifier.Verify(ctx, rawIDToken)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "invalid token")
 					slog.Error("Invalid token, redirecting to login page")
 					sessionStore.Clear(w, r)
 					redirectToLogin(w, r)
@@ -147,6 +177,8 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				}
 
 				if err := idToken.Claims(&claims); err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "failed to parse claims")
 					slog.Error("Failed to parse claims,", "error", err)
 					http.Error(w, "Failed to parse claims", http.StatusInternalServerError)
 					return
@@ -170,10 +202,11 @@ func AuthRequired(keycloakClient *keycloak.Client, sessionStore *session.Store) 
 				}
 			}
 
+			span.SetAttributes(attribute.String("user.sub", userInfo.Sub))
 			slog.Debug("Authenticated", "User", userInfo.PreferredUsername, "ClientRoles", userInfo.ClientRoles)
-			ctx := context.WithValue(r.Context(), UserContextKey, userInfo)
+			ctx = context.WithValue(ctx, UserContextKey, userInfo)
 
-			// Call next handler
+			// Call next handler with traced context
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

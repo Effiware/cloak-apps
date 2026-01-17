@@ -11,14 +11,16 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/effiware/cloak-apps/internal/services"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type HdaAndApi struct {
-	keycloakClient *keycloak.Client
-	authHandlers   *auth.Handlers
-	sessionStore   *session.Store
-	orgService     *services.OrganizationService
-	appService     *services.ApplicationService
+	keycloakClient     *keycloak.Client
+	authHandlers       *auth.Handlers
+	sessionStore       *session.Store
+	orgService         *services.OrganizationService
+	appService         *services.ApplicationService
+	prometheusRegistry *prometheus.Registry
 }
 
 func NewHdaAndApi(
@@ -27,13 +29,15 @@ func NewHdaAndApi(
 	sessionStore *session.Store,
 	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
+	prometheusRegistry *prometheus.Registry,
 ) *HdaAndApi {
 	return &HdaAndApi{
-		keycloakClient: keycloakClient,
-		authHandlers:   authHandlers,
-		sessionStore:   sessionStore,
-		orgService:     orgService,
-		appService:     appService,
+		keycloakClient:     keycloakClient,
+		authHandlers:       authHandlers,
+		sessionStore:       sessionStore,
+		orgService:         orgService,
+		appService:         appService,
+		prometheusRegistry: prometheusRegistry,
 	}
 }
 
@@ -46,8 +50,9 @@ func HttpServer(
 	sessionStore *session.Store,
 	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
+	prometheusRegistry *prometheus.Registry,
 ) *http.Server {
-	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, orgService, appService)
+	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, orgService, appService, prometheusRegistry)
 	readTimeout, writeTimout, idleTimeout := time.Duration(timeout), time.Duration(3*timeout), time.Duration(6*timeout)
 
 	server := &http.Server{

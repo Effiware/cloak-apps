@@ -10,7 +10,43 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 )
+
+var (
+	tracer = otel.Tracer("cloak-apps") //nolint:gochecknoglobals
+
+	// Metrics instruments (initialized via InitApplicationMetrics after MeterProvider is set)
+	applicationsFetchDuration metric.Float64Histogram
+	applicationsFetchCounter  metric.Int64Counter
+)
+
+// InitApplicationMetrics initializes metrics instruments. Must be called after MeterProvider is set.
+func InitApplicationMetrics() {
+	meter := otel.Meter("cloak-apps")
+	var err error
+
+	applicationsFetchDuration, err = meter.Float64Histogram(
+		"applications.fetch.duration",
+		metric.WithDescription("Duration of fetching applications for a user"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		slog.Error("Failed to create applications fetch duration histogram", "error", err)
+	}
+
+	applicationsFetchCounter, err = meter.Int64Counter(
+		"applications.fetch.total",
+		metric.WithDescription("Total number of application fetch operations"),
+		metric.WithUnit("{operation}"),
+	)
+	if err != nil {
+		slog.Error("Failed to create applications fetch counter", "error", err)
+	}
+}
 
 type ApplicationService struct {
 	done              chan struct{}
@@ -39,8 +75,13 @@ func NewApplicationService(adminClient *keycloak.AdminClient, cloakAppsClientId 
 
 // loadClientScopes fetches all client scopes and builds ID→name mapping
 func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "ApplicationService.LoadClientScopes")
+	defer span.End()
+
 	scopes, err := as.adminClient.GetClientScopes(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get client scopes")
 		return err
 	}
 
@@ -48,6 +89,7 @@ func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
 		as.clientScopes[scope.ID] = scope.Name
 	}
 
+	span.SetAttributes(attribute.Int("scopes.count", len(as.clientScopes)))
 	slog.Debug("Loaded client scopes,", "total_number", len(as.clientScopes))
 	return nil
 }
@@ -72,8 +114,19 @@ func (as *ApplicationService) scheduleClientScopesRefresh() {
 
 // GetApplicationsForUser fetches all clients and filters based on user's roles
 func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userInfo *middlewares.UserInfo) ([]models.Application, error) {
+	ctx, span := tracer.Start(ctx, "ApplicationService.GetApplicationsForUser")
+	defer span.End()
+	start := time.Now()
+
+	span.SetAttributes(attribute.String("user.sub", userInfo.Sub))
+
 	clients, err := as.adminClient.GetClients(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to get clients")
+		applicationsFetchCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "error")))
+		applicationsFetchDuration.Record(ctx, time.Since(start).Seconds(),
+			metric.WithAttributes(attribute.String("status", "error")))
 		return nil, fmt.Errorf("failed to get clients: %w", err)
 	}
 
@@ -102,6 +155,10 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 		}
 	}
 
+	span.SetAttributes(attribute.Int("applications.count", len(applications)))
+	applicationsFetchCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
+	applicationsFetchDuration.Record(ctx, time.Since(start).Seconds(),
+		metric.WithAttributes(attribute.String("status", "success")))
 	slog.Debug("Found accessible applications for", "user", userInfo.PreferredUsername, "applications", len(applications))
 	return applications, nil
 }

@@ -29,7 +29,10 @@ services:
       - "${SERVER_PORT}:${SERVER_PORT}"
       - "${TEMPL_PROXY_PORT}:${TEMPL_PROXY_PORT}"
     environment:
-      - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}  # Overwritten by env var
+      - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}
+      - CLOAKAPPS_KEYCLOAK_URL=http://keycloak:${KEYCLOAK_PORT}
+      - CLOAKAPPS_KEYCLOAK_REDIRECT_URI=http://localhost:${SERVER_PORT}/auth/callback
+      - CLOAKAPPS_OTLP_URL=http://jaeger:${JAEGER_HTTP_PORT:-4318}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
 
@@ -41,8 +44,12 @@ services:
     networks:
       - cloak-apps-net
     ports:
-      - "${KEYCLOAK_PORT}:8080"
+      - "${KEYCLOAK_PORT}:${KEYCLOAK_PORT}"
+      - "443:443"
     restart: unless-stopped
+    volumes:
+      - ./keycloak-server.crt.pem:/opt/keycloak/keycloak-server.crt.pem:ro
+      - ./keycloak-server.key.pem:/opt/keycloak/keycloak-server.key.pem:ro
     environment:
       KC_DB: postgres
       KC_DB_URL_HOST: keycloak-db
@@ -56,7 +63,11 @@ services:
     command: |
       start-dev
       --http-enabled=true
+      --http-port=${KEYCLOAK_PORT}
+      --https-port=443
       --hostname-strict=false
+      --https-certificate-file=/opt/keycloak/keycloak-server.crt.pem
+      --https-certificate-key-file=/opt/keycloak/keycloak-server.key.pem
       -Dkeycloak.profile.feature.token_exchange=enabled
       -Dkeycloak.profile.feature.admin_fine_grained_authz=enabled
 
@@ -71,3 +82,36 @@ services:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: STRONG_DB_PASSWORD2
+
+  jaeger:
+    image: jaegertracing/jaeger:2.14.1
+    container_name: cloak-apps-jaeger
+    restart: unless-stopped
+    profiles:
+      - whole
+    depends_on:
+      - keycloak
+    ports:
+      - "${JAEGER_UI_PORT}:16686"
+      - "${JAEGER_GRPC_PORT:-4317}:4317"
+      - "${JAEGER_HTTP_PORT:-4318}:4318"
+    environment:
+      - LOG_LEVEL=debug
+    networks:
+      - cloak-apps-net
+
+  prometheus:
+    image: prom/prometheus:v3.4.0
+    container_name: cloak-apps-prometheus
+    restart: unless-stopped
+    profiles:
+      - whole
+    ports:
+      - "${PROMETHEUS_PORT}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
+    networks:
+      - cloak-apps-net

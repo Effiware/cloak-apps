@@ -20,6 +20,7 @@ Cloak Apps serves as a centralized hub where users can access all applications t
 - [x] Card and list view modes
 - [x] Type-safe templates with Templ
 - [x] Hypermedia-driven architecture with HTMX
+- [x] OpenTelemetry tracing and Prometheus metrics (`/metrics`)
 
 Built from the [Effiware GOTH template](https://github.com/Effiware/goth-template).
 
@@ -49,7 +50,7 @@ Or use Docker 28.1+
 
 2. **Build Tailwind and Go**
    ```bash
-   make build
+   make build-local
    ```
 
 3. **Run the application** with Hot Reload using Air 
@@ -61,28 +62,55 @@ Or use Docker 28.1+
 
 Either do `make prep` (will also install Go/Node dependencies on the host machine) or copy `.env.example` to `.env` and modify as needed.
 
-1. **Build the Docker image**
+1. **Generate certificates**
+   ```bash
+   make gen-certs
+   ```
+
+2. **Build the Docker image**
    ```bash
    make docker-build
    ```
 
-2. **Run the Docker container**
+3. **Run the Docker container**
    ```bash
    make docker-up
    ```
 
-3. **Stop the Docker container**
+4. **Stop the Docker container**
    ```bash
    make docker-down
    ```
+
+### Add hostnames to your local DNS resolver
+
+If you're on Mac or linux simply add below line to your `/etc/hosts`
+
+```txt
+127.0.0.1    keycloak
+```
+
+### Import sample realm
+
+The app as is uses a realm called **cloak-apps-realm**, the easies way to start using the project is to create a new
+realm in Keycloak with the same name and import (seed) the default data from [cloak-apps-realm-export.json](./seed/cloak-apps-realm-export.json)
+
+You should be able to log in to admin console on `https://localhost/admin` - it uses self-signed certificates so you
+have to accept potential risk alert in the browser.
+
+Detailed information is available in [KEYCLOAK_CONFIGURATION.md](./KEYCLOAK_CONFIGURATION.md)
 
 ---
 
 ## Access the Application
 
-Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
+In `.env` file there are port overwrites with the default setup. You shouldn't need to change them but there is always
+a possibility to do so.
 
-The port should match the `SERVER_PORT` in your `.env` file.
+Docker Compose includes Keycloak, Jaeger and Prometheus. Access them at `https://localhost`, `http://localhost:8083`
+and `http://localhost:8084` respectively
+
+Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
 
 ---
 

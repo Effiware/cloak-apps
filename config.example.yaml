@@ -20,8 +20,13 @@ session:
   secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"
   max_age: 3600  # 1 hour by default
 #  secure: false  # needed on local environment or when no HTTPS enabled
-
   store: "filesystem"  # "filesystem" (default), "cookie", "redis"
 #  introspection_cache_ttl: 15  # seconds, only for store: "cookie"
 #  redis_url: "redis://localhost:6379/0"  # only for store: "redis"
 
+otlp:
+  url: "http://localhost:4318"
+#  secure: false  # needed on local environment or when no HTTPS enabled
+
+metrics:
+  enabled: true
