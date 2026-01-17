@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/effiware/cloak-apps/internal/config"
@@ -42,6 +46,8 @@ func main() {
 	}
 	slog.Info("Initialized slog with", "level", level)
 
+	// Initialize TracerProvider (stored for graceful shutdown)
+	var tracerProvider *sdktrace.TracerProvider
 	if cfg.Otlp.Url != "" {
 		otlpHttpHeaders := map[string]string{
 			"content-type": "application/json",
@@ -60,7 +66,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		otlpTracerProvider := sdktrace.NewTracerProvider(
+		tracerProvider = sdktrace.NewTracerProvider(
 			sdktrace.WithBatcher(
 				otlpHttpExporter,
 				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
@@ -77,7 +83,7 @@ func main() {
 		)
 
 		// Set it as the global trace provider
-		otel.SetTracerProvider(otlpTracerProvider)
+		otel.SetTracerProvider(tracerProvider)
 		slog.Info("OTLP Trace Provider initialized,", "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure)
 	}
 
@@ -151,8 +157,47 @@ func main() {
 	slog.Info("Keycloak", "URL", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
 	slog.Info("Redirect", "URI", cfg.Keycloak.RedirectUri)
 
-	if err := httpServer.ListenAndServe(); err != nil {
-		slog.Error("Starting server failed", "error", err)
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	// Wait for interrupt signal or server error
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErr:
+		slog.Error("Server failed to start", "error", err)
 		os.Exit(1)
+	case sig := <-quit:
+		slog.Info("Received shutdown signal", "signal", sig)
 	}
+
+	// Graceful shutdown with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	slog.Info("Shutting down HTTP server...")
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP server shutdown error", "error", err)
+	} else {
+		slog.Info("HTTP server shutdown complete")
+	}
+
+	// Shutdown TracerProvider after server (flushes pending spans)
+	if tracerProvider != nil {
+		slog.Info("Shutting down TracerProvider...")
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			slog.Error("TracerProvider shutdown error", "error", err)
+		} else {
+			slog.Info("TracerProvider shutdown complete")
+		}
+	}
+
+	slog.Info("Graceful shutdown complete")
 }

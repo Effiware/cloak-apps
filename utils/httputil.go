@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -55,6 +56,8 @@ func SendRetryableRequest(
 	hook BeforeCallHook,
 	client *http.Client,
 ) ([]byte, error) {
+	span := trace.SpanFromContext(ctx)
+
 	if len(retriableStatuses) == 0 {
 		return nil, fmt.Errorf("you must provide at least one retriable status code")
 	}
@@ -69,23 +72,33 @@ func SendRetryableRequest(
 		client = http.DefaultClient
 	}
 	for next := true; next; next = retryNum <= maxRetryTimes && slices.Contains(retriableStatuses, statusCode) {
-		span := trace.SpanFromContext(ctx)
-		span.SetAttributes(attribute.Int("retryNum", retryNum))
+		if retryNum > 0 {
+			span.AddEvent("http.retry", trace.WithAttributes(
+				attribute.Int("retry.attempt", retryNum),
+				attribute.Int("http.response.status_code", statusCode),
+			))
+		}
 
 		// Operate on a request (deep) copy
 		reqCopy, err := deepCopyRequest(ctx, req)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to copy request")
 			return nil, err
 		}
 
 		if hook != nil {
 			if err := hook(ctx, reqCopy); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "hook failed")
 				return nil, err
 			}
 		}
 
 		resp, err := client.Do(reqCopy)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "request failed")
 			return nil, fmt.Errorf("failed to execute request: %w", err)
 		}
 
@@ -93,17 +106,24 @@ func SendRetryableRequest(
 		resBody, err = io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to read response")
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 
 		if statusCode == http.StatusOK {
+			span.SetAttributes(attribute.Int("http.retry_count", retryNum))
 			return resBody, nil
 		}
 
 		retryNum++
 	}
 
-	return nil, fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
+	err := fmt.Errorf("request failed after %d attempts with status %d: %s", retryNum, statusCode, string(resBody))
+	span.RecordError(err)
+	span.SetStatus(codes.Error, "max retries exceeded")
+	span.SetAttributes(attribute.Int("http.retry_count", retryNum))
+	return nil, err
 }
 
 // CacheFirstTTL tracks last time it was called and returns a cached result until ttl expires
@@ -120,15 +140,16 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 		defer m.Unlock()
 
 		if time.Now().After(expires) {
-			span.SetAttributes(attribute.String("ttlCache", "miss"))
+			span.SetAttributes(attribute.String("cache.status", "miss"))
 			result, err = circuit(ctx)
 			if err == nil {
 				// Move expiration only if no error
 				expires = time.Now().Add(ttl)
 			}
+			return result, err
 		}
 
-		span.SetAttributes(attribute.String("ttlCache", "hit"))
+		span.SetAttributes(attribute.String("cache.status", "hit"))
 		return result, err
 	}
 }
@@ -182,7 +203,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 		cache := results[_key]
 
 		if cache == nil || time.Now().After(cache.expires) {
-			span.SetAttributes(attribute.String("ttlCache", "miss"))
+			span.SetAttributes(attribute.String("cache.status", "miss"))
 			var expires time.Time
 
 			res, err := circuit(ctx, key)
@@ -199,7 +220,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 			return res, err
 		}
 
-		span.SetAttributes(attribute.String("ttlCache", "hit"))
+		span.SetAttributes(attribute.String("cache.status", "hit"))
 		return cache.result, cache.err
 	}
 }

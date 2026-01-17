@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // IntrospectionResponse represents the response from Keycloak's introspection endpoint
@@ -93,16 +95,25 @@ func (c *Client) introspectToken(ctx context.Context, token string) ([]byte, err
 
 // IntrospectToken returns the introspection result with claims if the token is valid
 func (c *Client) IntrospectToken(ctx context.Context, token string) (*IntrospectionResult, error) {
+	ctx, span := tracer.Start(ctx, "keycloak.IntrospectToken")
+	defer span.End()
+
 	slog.Debug("Introspecting token,", "token[:50]", token[:50])
 	introspBody, err := c.cachedIntrospectToken(ctx, token)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "introspection failed")
 		return nil, err
 	}
 
 	var introspResp IntrospectionResponse
 	if err := json.Unmarshal(introspBody, &introspResp); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to decode introspection response")
 		return nil, fmt.Errorf("failed to decode introspection response: %w", err)
 	}
+
+	span.SetAttributes(attribute.Bool("token.active", introspResp.Active))
 
 	result := &IntrospectionResult{
 		Active: introspResp.Active,
@@ -120,6 +131,8 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 		result.Claims["email_verified"] = introspResp.EmailVerified
 		result.Claims["realm_access"] = introspResp.RealmAccess
 		result.Claims["resource_access"] = introspResp.ResourceAccess
+
+		span.SetAttributes(attribute.String("user.sub", introspResp.Sub))
 	}
 
 	return result, nil

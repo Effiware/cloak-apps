@@ -10,6 +10,7 @@ import (
 	mw "github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/riandyrn/otelchi"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -17,6 +18,7 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
+	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
 	r.Use(middleware.Logger)
 
 	// Public routes
