@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -103,7 +105,10 @@ func NewAdminClient(baseURL, realm, clientID, clientSecret string) *AdminClient 
 
 // setTokenAndExpiry is a helper function to set new token and tokenExpiry in a thread-safe manner
 func (ac *AdminClient) setTokenAndExpiry(ctx context.Context, tr *TokenResponse, te time.Time) {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("Acquiring token mutex write lock")
+	defer span.AddEvent("Releasing token mutex write lock")
+
 	ac.tokenMutex.Lock()
 	defer ac.tokenMutex.Unlock()
 	ac.token = tr
@@ -112,21 +117,35 @@ func (ac *AdminClient) setTokenAndExpiry(ctx context.Context, tr *TokenResponse,
 
 // getToken is a helper function to obtain current token in a thread-safe manner
 func (ac *AdminClient) getToken(ctx context.Context) *TokenResponse {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("Acquiring token mutex read lock")
+	defer span.AddEvent("Releasing token mutex read lock")
+
 	ac.tokenMutex.RLock()
 	defer ac.tokenMutex.RUnlock()
+
 	return ac.token
 }
 
 // getTokenAndTokenExpiry is a helper function to obtain current token and tokenExpiry in a thread-safe manner
 func (ac *AdminClient) getTokenAndTokenExpiry(ctx context.Context) (*TokenResponse, time.Time) {
-	// TODO: Retrieve OTel span from context
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("Acquiring token mutex read lock")
+	defer span.AddEvent("Releasing token mutex read lock")
+
 	ac.tokenMutex.RLock()
 	defer ac.tokenMutex.RUnlock()
+
 	return ac.token, ac.tokenExpiry
 }
 
 func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
+	ctx, span := otel.GetTracerProvider().Tracer("cloak-apps").Start(
+		ctx,
+		"getServiceAccountToken",
+	)
+	defer span.End()
+
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", ac.BaseURL, ac.Realm)
 
 	data := url.Values{}
@@ -214,6 +233,12 @@ func (ac *AdminClient) getClients(ctx context.Context) ([]byte, error) {
 }
 
 func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, error) {
+	ctx, sp := otel.GetTracerProvider().Tracer("cloak-apps").Start(
+		ctx,
+		"GetClients",
+	)
+	defer sp.End()
+
 	resBody, err := ac.cachedGetClients(ctx)
 	if err != nil {
 		return nil, err
@@ -228,6 +253,12 @@ func (ac *AdminClient) GetClients(ctx context.Context) ([]ClientRepresentation, 
 }
 
 func (ac *AdminClient) GetClientScopes(ctx context.Context) ([]ClientScopeRepresentation, error) {
+	ctx, sp := otel.GetTracerProvider().Tracer("cloak-apps").Start(
+		ctx,
+		"GetClientScopes",
+	)
+	defer sp.End()
+
 	scopesURL := fmt.Sprintf("%s/admin/realms/%s/client-scopes", ac.BaseURL, ac.Realm)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", scopesURL, nil)

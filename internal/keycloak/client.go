@@ -8,6 +8,9 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 )
 
@@ -24,6 +27,13 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, keycloakURL, realm, clientID, clientSecret, redirectURI string) (*Client, error) {
+	ctx, span := otel.GetTracerProvider().Tracer("cloak-apps").Start(
+		ctx,
+		"NewClient",
+		trace.WithAttributes(attribute.String("clientID", clientID)),
+	)
+	defer span.End()
+
 	issuerURL := fmt.Sprintf("%s/realms/%s", keycloakURL, realm)
 
 	// Initialize OIDC provider

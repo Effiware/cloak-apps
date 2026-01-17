@@ -7,9 +7,6 @@ volumes:
   keycloak-db:
     labels:
       - "dev.cloakapps.description=Keycloak own database storage"
-  keycloak-db-2:
-    labels:
-      - "dev.cloakapps.description=Keycloak own database storage"
 
 services:
   cloak-apps:
@@ -87,9 +84,10 @@ services:
 
   jaeger:
     image: jaegertracing/jaeger:2.14.1
+    container_name: cloak-apps-jaeger
     restart: unless-stopped
-    profiles:
-      - whole
+#    profiles:
+#      - whole
     depends_on:
       - keycloak
     ports:

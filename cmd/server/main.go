@@ -12,6 +12,18 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/effiware/cloak-apps/internal/services"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.9.0"
+)
+
+const (
+	serviceName    = "cloak-apps"
+	serviceVersion = "0.0.1"
 )
 
 func main() {
@@ -30,9 +42,47 @@ func main() {
 	}
 	slog.Info("Initialized slog with", "level", level)
 
-	ctx := context.Background()
+	if cfg.Otlp.Url != "" {
+		otlpHttpHeaders := map[string]string{
+			"content-type": "application/json",
+		}
+		otlpClientOpts := []otlptracehttp.Option{
+			otlptracehttp.WithEndpoint(cfg.Otlp.Url),
+			otlptracehttp.WithHeaders(otlpHttpHeaders),
+		}
+		if !cfg.Otlp.Secure {
+			otlpClientOpts = append(otlpClientOpts, otlptracehttp.WithInsecure())
+		}
+
+		otlpHttpExporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient(otlpClientOpts...))
+		if err != nil {
+			slog.Error("Failed to create OTLP trace exporter,", "error", err)
+			os.Exit(1)
+		}
+
+		otlpTracerProvider := sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(
+				otlpHttpExporter,
+				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
+				sdktrace.WithBatchTimeout(sdktrace.DefaultScheduleDelay*time.Millisecond),
+				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
+			),
+			sdktrace.WithResource(
+				resource.NewWithAttributes(
+					semconv.SchemaURL,
+					semconv.ServiceNameKey.String(serviceName),
+					semconv.ServiceVersionKey.String(serviceVersion),
+				),
+			),
+		)
+
+		// Set it as the global trace provider
+		otel.SetTracerProvider(otlpTracerProvider)
+		slog.Info("OTLP Trace Provider initialized,", "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure)
+	}
+
 	keycloakClient, err := keycloak.NewClient(
-		ctx,
+		context.Background(),
 		cfg.Keycloak.Url,
 		cfg.Keycloak.Realm,
 		cfg.Keycloak.ClientId,

@@ -10,6 +10,7 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
+	"go.opentelemetry.io/otel"
 )
 
 type ApplicationService struct {
@@ -39,6 +40,12 @@ func NewApplicationService(adminClient *keycloak.AdminClient, cloakAppsClientId 
 
 // loadClientScopes fetches all client scopes and builds ID→name mapping
 func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
+	ctx, span := otel.GetTracerProvider().Tracer("cloak-apps").Start(
+		ctx,
+		"loadClientScopes",
+	)
+	defer span.End()
+
 	scopes, err := as.adminClient.GetClientScopes(ctx)
 	if err != nil {
 		return err

@@ -11,6 +11,9 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // BeforeCallHook is a hook (function) signature that should be called before applying the pattern
@@ -66,6 +69,9 @@ func SendRetryableRequest(
 		client = http.DefaultClient
 	}
 	for next := true; next; next = retryNum <= maxRetryTimes && slices.Contains(retriableStatuses, statusCode) {
+		span := trace.SpanFromContext(ctx)
+		span.SetAttributes(attribute.Int("retryNum", retryNum))
+
 		// Operate on a request (deep) copy
 		reqCopy, err := deepCopyRequest(ctx, req)
 		if err != nil {
@@ -108,10 +114,13 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 	var m sync.Mutex
 
 	return func(ctx context.Context) ([]byte, error) {
+		span := trace.SpanFromContext(ctx)
+
 		m.Lock()
 		defer m.Unlock()
 
 		if time.Now().After(expires) {
+			span.SetAttributes(attribute.String("ttlCache", "miss"))
 			result, err = circuit(ctx)
 			if err == nil {
 				// Move expiration only if no error
@@ -119,6 +128,7 @@ func CacheFirstTTL(circuit Circuit, ttl time.Duration) Circuit {
 			}
 		}
 
+		span.SetAttributes(attribute.String("ttlCache", "hit"))
 		return result, err
 	}
 }
@@ -161,6 +171,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 	}()
 
 	return func(ctx context.Context, key string) ([]byte, error) {
+		span := trace.SpanFromContext(ctx)
 		_key := key
 		if hashKeys {
 			_key = hashKey(key)
@@ -171,6 +182,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 		cache := results[_key]
 
 		if cache == nil || time.Now().After(cache.expires) {
+			span.SetAttributes(attribute.String("ttlCache", "miss"))
 			var expires time.Time
 
 			res, err := circuit(ctx, key)
@@ -187,6 +199,7 @@ func CacheFirstForKeyTTL(done chan struct{}, circuit CircuitWithKey, ttl time.Du
 			return res, err
 		}
 
+		span.SetAttributes(attribute.String("ttlCache", "hit"))
 		return cache.result, cache.err
 	}
 }
