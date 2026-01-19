@@ -127,7 +127,7 @@ func Index(userInfo *middlewares.UserInfo, organization models.Organization) tem
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Access all your authorized applications and services")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Access all your authorized applications/services and manage them using RBAC - all done in one place (Keycloak)!")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
