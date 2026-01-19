@@ -1,10 +1,12 @@
 FROM golang:1.25 AS builder
 ARG BUILD_HASH=unknown
+ARG SERVER_VERSION=0.0.0
 ARG CGO_ENABLED=0
 ARG GOOS=linux
 ARG GOARCH=amd64
 
 ENV BUILD_HASH=${BUILD_HASH}
+ENV SERVER_VERSION=${SERVER_VERSION}
 ENV CGO_ENABLED=${CGO_ENABLED}
 ENV GOOS=${GOOS}
 ENV GOARCH=${GOARCH}
@@ -20,7 +22,12 @@ RUN go mod download
 RUN npm ci
 
 RUN npm run build
-RUN go build -o ./bin/main cmd/server/main.go
+
+# Patch swagger.json version to match build version
+RUN sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${SERVER_VERSION}\"/" internal/docs/swagger.json
+RUN go build \
+    -ldflags "-X github.com/effiware/cloak-apps/internal/version.Version=${SERVER_VERSION} -X github.com/effiware/cloak-apps/internal/version.BuildHash=${BUILD_HASH}" \
+    -o ./bin/main cmd/server/main.go
 
 FROM alpine:latest
 WORKDIR /app

@@ -19,8 +19,16 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
 	r.Use(middleware.Logger)
+	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
+
+	// Public routes
+	r.Handle("/static/*", http.FileServer(http.FS(internal.StaticFiles)))
+
+	// Auth routes (public)
+	r.Get("/auth/login", hdaAndApi.authHandlers.HandleLogin)
+	r.Get("/auth/callback", hdaAndApi.authHandlers.HandleCallback)
+	r.Get("/auth/logout", hdaAndApi.authHandlers.HandleLogout)
 
 	// Metrics endpoint (public, secured via K8s NetworkPolicy)
 	if hdaAndApi.prometheusRegistry != nil {
@@ -28,16 +36,6 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 			EnableOpenMetrics: true,
 		}))
 	}
-
-	// Public routes
-	r.Handle("/docs/*", http.FileServer(http.FS(internal.DocsFS)))
-	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/docs/swagger.json")))
-	r.Handle("/static/*", http.FileServer(http.FS(internal.StaticFiles)))
-
-	// Auth routes (public)
-	r.Get("/auth/login", hdaAndApi.authHandlers.HandleLogin)
-	r.Get("/auth/callback", hdaAndApi.authHandlers.HandleCallback)
-	r.Get("/auth/logout", hdaAndApi.authHandlers.HandleLogout)
 
 	// Protected routes (require authentication)
 	r.Group(func(r chi.Router) {
@@ -53,6 +51,10 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 		// API routes
 		r.Get("/api/v1/organization", api.JsonHandler(api.GetOrganization(hdaAndApi.orgService)))
 		r.Get("/api/v1/applications", api.JsonHandler(api.GetApplications(hdaAndApi.appService)))
+		if hdaAndApi.swaggerEnabled {
+			r.Handle("/docs/*", http.FileServer(http.FS(internal.DocsFS)))
+			r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/docs/swagger.json")))
+		}
 	})
 
 	return r

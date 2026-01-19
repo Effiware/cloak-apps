@@ -24,6 +24,19 @@ Cloak Apps serves as a centralized hub where users can access all applications t
 
 Built from the [Effiware GOTH template](https://github.com/Effiware/goth-template).
 
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="seed/cloak-apps-ui.png" alt="Cloak Apps UI" width="450"/></td>
+    <td><img src="seed/keycloak-rbac.png" alt="Keycloak RBAC Configuration" width="450"/></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Application Portal</em></td>
+    <td align="center"><em>Keycloak RBAC</em></td>
+  </tr>
+</table>
+
 ## Quick Start
 
 ### Prerequisites
@@ -93,7 +106,7 @@ If you're on Mac or linux simply add below line to your `/etc/hosts`
 ### Import sample realm
 
 The app as is uses a realm called **cloak-apps-realm**, the easies way to start using the project is to create a new
-realm in Keycloak with the same name and import (seed) the default data from [cloak-apps-realm-export.json](./seed/cloak-apps-realm-export.json)
+realm in Keycloak with the same name and import (seed) the default data from [cloak-apps-realm-export.json](seed/cloak-apps-realm-export.json)
 
 You should be able to log in to admin console on `https://localhost/admin` - it uses self-signed certificates so you
 have to accept potential risk alert in the browser.

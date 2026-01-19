@@ -37,12 +37,13 @@ func JsonHandler(endpointHandler EndpointHandlerT) http.HandlerFunc {
 }
 
 // GetOrganization returns a handler that loads organization info
-// @Summary Get organization
-// @Detail Get organization details
-// @Tags organization
-// @Accept json
-// @Produce json
-// @Router /organization [get]
+//
+//	@Summary	Get organization
+//	@Detail		Get organization details
+//	@Tags		organization
+//	@Accept		json
+//	@Produce	json
+//	@Router		/organization [get]
 func GetOrganization(orgService interface {
 	GetOrganization() (models.Organization, error)
 }) EndpointHandlerT {
@@ -57,12 +58,13 @@ func GetOrganization(orgService interface {
 }
 
 // GetApplications returns a handler that fetches applications for the authenticated user
-// @Summary List assigned applications
-// @Description List assigned applications for the authenticated user
-// @Tags applications
-// @Accept json
-// @Produce json
-// @Router /applications [get]
+//
+//	@Summary		List assigned applications
+//	@Description	List assigned applications for the authenticated user
+//	@Tags			applications
+//	@Accept			json
+//	@Produce		json
+//	@Router			/applications [get]
 func GetApplications(appService interface {
 	GetApplicationsForUser(ctx context.Context, userInfo *middlewares.UserInfo) ([]models.Application, error)
 }) EndpointHandlerT {

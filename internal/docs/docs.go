@@ -59,11 +59,11 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "0.0.1",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{"http"},
-	Title:            "GOTH Template API",
+	Title:            "Cloak-Apps JSON API",
 	Description:      "This is an example server for a GOTH template application.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,

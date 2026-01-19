@@ -22,8 +22,9 @@ type Config struct {
 		Port               int    `mapstructure:"port"`
 		Host               string `mapstructure:"host"`
 		Timeout            int    `mapstructure:"timeout"`
-		LogLevel           string `mapstructure:"log_level"`
 		RefreshIntervalMin int    `mapstructure:"refresh_interval_min"`
+		LogLevel           string `mapstructure:"log_level"`
+		Environment        string `mapstructure:"environment"`
 	} `mapstructure:"server"`
 
 	Session struct {
@@ -42,9 +43,8 @@ type Config struct {
 	} `mapstructure:"organization"`
 
 	Otlp struct {
-		Url         string `mapstructure:"url"`
-		Secure      bool   `mapstructure:"secure"`
-		Environment string `mapstructure:"environment"`
+		Url    string `mapstructure:"url"`
+		Secure bool   `mapstructure:"secure"`
 	} `mapstructure:"otlp"`
 
 	Metrics struct {
@@ -61,8 +61,9 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.timeout", 10)
-	viper.SetDefault("server.log_level", "INFO")
 	viper.SetDefault("server.refresh_interval_min", 5)
+	viper.SetDefault("server.log_level", "INFO")
+	viper.SetDefault("server.environment", "development")
 	viper.SetDefault("session.max_age", 3600)
 	viper.SetDefault("session.secure", true)
 	viper.SetDefault("session.store", "filesystem")
@@ -70,7 +71,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("organization.name", "Effiware")
 	viper.SetDefault("organization.home_url", "https://effiware.com")
 	viper.SetDefault("otlp.secure", true)
-	viper.SetDefault("otlp.environment", "development")
 	viper.SetDefault("metrics.enabled", false)
 
 	// env overrides

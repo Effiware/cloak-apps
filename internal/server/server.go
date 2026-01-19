@@ -21,6 +21,7 @@ type HdaAndApi struct {
 	orgService         *services.OrganizationService
 	appService         *services.ApplicationService
 	prometheusRegistry *prometheus.Registry
+	swaggerEnabled     bool
 }
 
 func NewHdaAndApi(
@@ -30,6 +31,7 @@ func NewHdaAndApi(
 	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
 	prometheusRegistry *prometheus.Registry,
+	swaggerEnabled bool,
 ) *HdaAndApi {
 	return &HdaAndApi{
 		keycloakClient:     keycloakClient,
@@ -38,6 +40,7 @@ func NewHdaAndApi(
 		orgService:         orgService,
 		appService:         appService,
 		prometheusRegistry: prometheusRegistry,
+		swaggerEnabled:     swaggerEnabled,
 	}
 }
 
@@ -51,8 +54,9 @@ func HttpServer(
 	orgService *services.OrganizationService,
 	appService *services.ApplicationService,
 	prometheusRegistry *prometheus.Registry,
+	swaggerEnabled bool,
 ) *http.Server {
-	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, orgService, appService, prometheusRegistry)
+	hdaAndApi := NewHdaAndApi(keycloakClient, authHandlers, sessionStore, orgService, appService, prometheusRegistry, swaggerEnabled)
 	readTimeout, writeTimout, idleTimeout := time.Duration(timeout), time.Duration(3*timeout), time.Duration(6*timeout)
 
 	server := &http.Server{

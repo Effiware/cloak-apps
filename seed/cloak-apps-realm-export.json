@@ -466,6 +466,17 @@
           "containerId": "fb162994-b6b4-475d-aea4-b3c1a0e1cafe",
           "attributes": {}
         }
+      ],
+      "jaeger": [
+        {
+          "id": "e7488892-6829-446c-ae14-96d873fda191",
+          "name": "jaeger-ui-view",
+          "description": "A role to view Jeager UI",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "de29cc74-917e-4cf6-8766-4264a56741b6",
+          "attributes": {}
+        }
       ]
     }
   },
@@ -490,6 +501,9 @@
         "prometheus": [
           "prometheus-admin"
         ],
+        "jaeger": [
+          "jaeger-ui-view"
+        ],
         "account": [
           "view-profile"
         ]
@@ -511,6 +525,9 @@
         ],
         "prometheus": [
           "prometheus-user"
+        ],
+        "jaeger": [
+          "jaeger-ui-view"
         ],
         "account": [
           "view-profile"
@@ -619,7 +636,7 @@
     {
       "id": "fb162994-b6b4-475d-aea4-b3c1a0e1cafe",
       "clientId": "account",
-      "name": "${client_account}",
+      "name": "Keycloak Account",
       "description": "{\"text\": \"Keycloak user account \", \"tooltip\": \"Manage your Keycloak account \", \"sso_enabled\": true, \"tags\": [\"auth\"]}",
       "rootUrl": "${authBaseUrl}",
       "adminUrl": "",
@@ -880,8 +897,8 @@
         "acr",
         "roles",
         "profile",
-        "basic",
         "env-shared",
+        "basic",
         "email"
       ],
       "optionalClientScopes": [
@@ -1060,13 +1077,86 @@
       ]
     },
     {
+      "id": "de29cc74-917e-4cf6-8766-4264a56741b6",
+      "clientId": "jaeger",
+      "name": "Jaeger",
+      "description": "{\"text\": \"Distributed tracing observability platform for modern software applications.\", \"tooltip\": \"Monitor and troubleshoot workflows in distributed systems.\", \"sso_enabled\": true, \"tags\": [\"visualization\", \"analytics\"], \"order\": 2}",
+      "rootUrl": "",
+      "adminUrl": "",
+      "baseUrl": "http://localhost:8083",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [
+        "/*"
+      ],
+      "webOrigins": [
+        "/*"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": true,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "request.object.signature.alg": "any",
+        "request.object.encryption.alg": "any",
+        "client.introspection.response.allow.jwt.claim.enabled": "false",
+        "standard.token.exchange.enabled": "false",
+        "frontchannel.logout.session.required": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "logoUri": "https://www.jaegertracing.io/img/jaeger-icon-reverse-color.svg",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "use.refresh.tokens": "true",
+        "realm_client": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "client.use.lightweight.access.token.enabled": "false",
+        "backchannel.logout.session.required": "true",
+        "request.object.required": "not required",
+        "client_credentials.use_refresh_token": "false",
+        "access.token.header.type.rfc9068": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "require.pushed.authorization.requests": "false",
+        "acr.loa.map": "{}",
+        "display.on.consent.screen": "false",
+        "request.object.encryption.enc": "any",
+        "token.response.type.bearer.lower-case": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic"
+      ],
+      "optionalClientScopes": [
+        "space-operations",
+        "address",
+        "phone",
+        "offline_access",
+        "organization",
+        "microprofile-jwt",
+        "env-shared",
+        "env-development"
+      ]
+    },
+    {
       "id": "75c95164-c492-4646-91ee-0a8b519b4a4f",
       "clientId": "prometheus",
       "name": "Prometheus",
       "description": "{\"text\": \"Monitoring system and time series database\", \"tooltip\": \"View metrics and alerts\", \"sso_enabled\" :true, \"tags\":[\"monitoring\",\"metrics\"], \"order\": 1}",
       "rootUrl": "",
       "adminUrl": "",
-      "baseUrl": "http://prometheus.localhost",
+      "baseUrl": "http://localhost:8084",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
