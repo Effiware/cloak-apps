@@ -11,12 +11,13 @@ volumes:
 services:
   cloak-apps:
     container_name: cloak-apps
-    image: effiware/cloak-apps:0.0.1
+    image: effiware/cloak-apps:${BUILD_VERSION:-0.0.1}
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        BUILD_HASH: "abcd123"
+        SERVER_VERSION: ${BUILD_VERSION:-0.0.1}
+        BUILD_HASH: ${BUILD_HASH:-abcd123}
     platform: linux/amd64
     restart: unless-stopped
     profiles:
@@ -29,6 +30,7 @@ services:
       - "${SERVER_PORT}:${SERVER_PORT}"
       - "${TEMPL_PROXY_PORT}:${TEMPL_PROXY_PORT}"
     environment:
+      - CLOAKAPPS_SERVER_ENVIRONMENT=${ENV}
       - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}
       - CLOAKAPPS_KEYCLOAK_URL=http://keycloak:${KEYCLOAK_PORT}
       - CLOAKAPPS_KEYCLOAK_REDIRECT_URI=http://localhost:${SERVER_PORT}/auth/callback

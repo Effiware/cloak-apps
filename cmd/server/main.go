@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,7 +18,9 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
 	"github.com/effiware/cloak-apps/internal/services"
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/effiware/cloak-apps/utils"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel"
@@ -29,10 +33,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-const (
-	serviceName    = "cloak-apps"
-	serviceVersion = "0.0.1"
-)
+const serviceName = "cloak-apps"
 
 // getContainerID returns the HOSTNAME env var (container ID in K8s/Docker)
 func getContainerID() string {
@@ -62,12 +63,13 @@ func main() {
 	otelResource := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String(serviceName),
-		semconv.ServiceVersionKey.String(serviceVersion),
+		semconv.ServiceVersionKey.String(version.Version),
+		attribute.String("vcs.ref.head.revision", version.BuildHash), // not yet in semconv/v1.26.0
+		semconv.DeploymentEnvironmentKey.String(cfg.Server.Environment),
+		semconv.ContainerIDKey.String(getContainerID()),
 		semconv.TelemetrySDKLanguageGo,
 		semconv.TelemetrySDKNameKey.String("opentelemetry"),
 		semconv.TelemetrySDKVersionKey.String("1.26.0"),
-		semconv.DeploymentEnvironmentKey.String(cfg.Otlp.Environment),
-		semconv.ContainerIDKey.String(getContainerID()),
 	)
 
 	// Initialize TracerProvider (stored for graceful shutdown)
@@ -203,9 +205,10 @@ func main() {
 		orgService,
 		appService,
 		prometheusRegistry,
+		!slices.Contains([]string{"production", "prod"}, strings.ToLower(cfg.Server.Environment)),
 	)
 
-	slog.Info("Starting server,", "address", httpServer.Addr)
+	slog.Info("Starting server,", "address", httpServer.Addr, "version", version.Version, "build", version.BuildHash)
 	slog.Info("Keycloak", "URL", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
 	slog.Info("Redirect", "URI", cfg.Keycloak.RedirectUri)
 

@@ -5,7 +5,7 @@
     "swagger": "2.0",
     "info": {
         "description": "This is an example server for a GOTH template application.",
-        "title": "GOTH Template API",
+        "title": "Cloak-Apps JSON API",
         "contact": {
             "name": "Effi-Support",
             "url": "https://www.effiware.com/contact",
@@ -15,7 +15,7 @@
             "name": "Apache 2.0",
             "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
         },
-        "version": "1.0"
+        "version": "0.0.1"
     },
     "host": "localhost:8080",
     "basePath": "/api/v1",

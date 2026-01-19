@@ -13,8 +13,9 @@ server:
   port: 8080
 #  host: "localhost"
 #  timeout: 10
-  log_level: "DEBUG"
   refresh_interval_min: 5  # 5min by default
+  environment: "local"
+  log_level: "DEBUG"
 
 session:
   secret: "<GENERATE_RANDOM_SECRET_32_CHARS>"

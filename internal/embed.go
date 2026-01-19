@@ -1,15 +1,16 @@
-// Package internal GOTH Template API
-// @title GOTH Template API
-// @version 1.0
-// @description This is an example server for a GOTH template application.
-// @contact.name Effi-Support
-// @contact.url https://www.effiware.com/contact
-// @contact.email contact@effiware.com
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-// @host localhost:8080
-// @schemes http
-// @BasePath /api/v1
+// Package internal Cloak-Apps
+//
+//	@title			Cloak-Apps JSON API
+//	@version		0.0.1
+//	@description	This is an example server for a GOTH template application.
+//	@contact.name	Effi-Support
+//	@contact.url	https://www.effiware.com/contact
+//	@contact.email	contact@effiware.com
+//	@license.name	Apache 2.0
+//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+//	@host			localhost:8080
+//	@schemes		http
+//	@BasePath		/api/v1
 package internal
 
 import (
