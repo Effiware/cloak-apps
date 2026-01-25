@@ -9,6 +9,14 @@ This guide covers the required Keycloak configuration for the Cloak Apps portal 
 
 ## Required Configuration
 
+### 1. Create Service account for `cloak-apps-portal`
+
+Portal client has to have *_Service accounts roles_* enabled in its *_Authentication flow_* checkboxes. Then, after navigating 
+to *_Service accounts roles_* tab an additional role of _view_clients_ has to be added to the default roles.
+
+It is necessary as this role will be used by the application to fetch all available clients registered in Keycloak and to render 
+all the hypermedia in case user has a role assigned to them.
+
 ### 1. Enable Client Roles in ID Token
 
 **Why**: The application reads client roles from the `resource_access` claim in the ID token to determine which applications a user can access.
@@ -40,7 +48,7 @@ For each application you want to display in the portal:
    - **Client ID**: Unique identifier (e.g., `grafana`, `prometheus`)
    - **Name**: Display name shown in portal
    - **Description**: JSON metadata (see below)
-   - **Root URL / Home URL**: Application URL
+   - **Home URL**: Application URL
    - **Logo URL** (in Attributes → Advanced): Thumbnail image URL
 
 3. **Description Field Format** (JSON):

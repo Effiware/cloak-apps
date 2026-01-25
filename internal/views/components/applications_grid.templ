@@ -52,7 +52,6 @@ func buildURL(env, view string) string {
 // currentView: current view mode (card, list)
 templ ApplicationsGrid(applications []models.Application, environments []string, currentEnv string, currentView string) {
 	<div id="applications-content">
-		<!-- Controls: Environment Filter + View Toggle -->
 		<div class="flex items-start justify-between mb-6">
 			<!-- Environment Filter (dynamic tabs) -->
 			<div>
@@ -72,6 +71,7 @@ templ ApplicationsGrid(applications []models.Application, environments []string,
 		</div>
 
 		<!-- Applications -->
+		<div class="slide-it">
 		if len(applications) == 0 {
 			@EmptyState(currentEnv)
 		} else if currentView == "list" {
@@ -79,6 +79,7 @@ templ ApplicationsGrid(applications []models.Application, environments []string,
 		} else {
 			@ApplicationsCards(applications)
 		}
+		</div>
 	</div>
 }
 
@@ -86,7 +87,7 @@ templ EnvironmentTab(tabEnv string, currentEnv string, currentView string) {
 	<button
 		hx-get={ buildURL(tabEnv, currentView) }
 		hx-target="#applications-container"
-		hx-swap="innerHTML"
+		hx-swap="innerHTML transition:true"
 		hx-indicator="#loading-spinner"
 		class={ "px-3 py-1.5 rounded-md text-sm font-medium transition-colors capitalize",
 			templ.KV("bg-yellow-600 text-white", tabEnv == currentEnv),
@@ -99,7 +100,7 @@ templ ViewToggleButton(buttonView string, currentEnv string, currentView string)
 	<button
 		hx-get={ buildURL(currentEnv, buttonView) }
 		hx-target="#applications-container"
-		hx-swap="innerHTML"
+		hx-swap="innerHTML transition:true"
 		hx-indicator="#loading-spinner"
 		class={ "p-1.5 rounded transition-colors",
 			templ.KV("bg-white dark:bg-gray-700 shadow-sm", buttonView == currentView) }

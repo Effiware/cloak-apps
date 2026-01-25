@@ -26,7 +26,7 @@ func getInitials(name string) string {
 	return string(parts[0][0]) + string(parts[1][0])
 }
 
-func Index(userInfo *middlewares.UserInfo, organization models.Organization) templ.Component {
+func slideTransitionCSS() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -47,92 +47,129 @@ func Index(userInfo *middlewares.UserInfo, organization models.Organization) tem
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<html lang=\"en\" class=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Cloak Apps</title><link href=\"/static/img/favicon.ico\" type=\"image/x-icon\" rel=\"icon\"><link href=\"/static/css/tailwind.css\" rel=\"stylesheet\"><style>\n\t\t\t\t/* Override HTMX indicator to use display instead of opacity */\n\t\t\t\t.htmx-indicator { display: none; }\n\t\t\t\t.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }\n\t\t\t</style><script src=\"https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js\" integrity=\"sha384-ZBXiYtYQ6hJ2Y0ZNoYuI+Nq5MqWBr+chMrS/RkXpNzQCApHEhOt2aY8EJgqwHLkJ\" crossorigin=\"anonymous\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.5.0/dist/cdn.min.js\"></script></head><body class=\"bg-gray-50 dark:bg-gray-900 min-h-screen\" x-data=\"{\n\t\t\t\tuserMenuOpen: false,\n\t\t\t\tdarkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,\n\n\t\t\t\ttoggleTheme() {\n\t\t\t\t\tthis.darkMode = !this.darkMode;\n\t\t\t\t\tlocalStorage.setItem('theme', this.darkMode ? 'dark' : 'light');\n\t\t\t\t\tthis.darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');\n\t\t\t\t}\n\t\t\t}\" x-init=\"darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')\"><!-- Navbar --><nav class=\"bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8\"><div class=\"flex justify-between h-14\"><!-- Logo --><div class=\"flex items-center\"><div class=\"flex-shrink-0 flex items-center\"><a href=\"https://github.com/Effiware/cloak-apps\"><img class=\"h-14 w-14 text-blue-600 dark:text-blue-400\" src=\"/static/img/launcher-stack.svg\" alt=\"CloakApps Logo\"></a><div class=\"ml-2\"><span class=\"text-lg font-medium text-gray-900 dark:text-white\"><a href=\"https://github.com/Effiware/cloak-apps\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n        @keyframes fade-in {\n            from { opacity: 0; }\n        }\n\n        @keyframes fade-out {\n            to { opacity: 0; }\n        }\n\n        @keyframes slide-from-right {\n            from { transform: translateX(90px); }\n        }\n\n        @keyframes slide-to-left {\n            to { transform: translateX(-90px); }\n        }\n\n        .slide-it {\n            view-transition-name: slide-it;\n        }\n\n        ::view-transition-old(slide-it) {\n            animation: 180ms cubic-bezier(0.4, 0, 1, 1) both fade-out,\n            600ms cubic-bezier(0.4, 0, 0.2, 1) both slide-to-left;\n        }\n\n        ::view-transition-new(slide-it) {\n            animation: 420ms cubic-bezier(0, 0, 0.2, 1) 90ms both fade-in,\n            600ms cubic-bezier(0.4, 0, 0.2, 1) both slide-from-right;\n        }\n    </style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(organization.Name)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 59, Col: 141}
+		return nil
+	})
+}
+
+func Index(userInfo *middlewares.UserInfo, organization models.Organization) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var2 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var2 == nil {
+			templ_7745c5c3_Var2 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<html lang=\"en\" class=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Cloak Apps</title><link href=\"/static/img/favicon.ico\" type=\"image/x-icon\" rel=\"icon\"><link href=\"/static/css/tailwind.css\" rel=\"stylesheet\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " Apps</a></span><p class=\"font-extralight text-xs text-gray-900 dark:text-white\">powered by <a class=\"text-yellow-600 dark:text-yellow-400\" href=\"https://effiware.com\"><u>Effiware</u></a></p></div></div></div><!-- Right side: Dark mode toggle and User menu --><div class=\"flex items-center space-x-4\"><!-- Dark Mode Toggle --><button @click=\"toggleTheme()\" class=\"p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors\" title=\"Toggle dark mode\"><!-- Sun Icon (shown in dark mode) --><svg x-show=\"darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg><!-- Moon Icon (shown in light mode) --><svg x-show=\"!darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button><!-- User Menu --><div class=\"relative\" @click.away=\"userMenuOpen = false\"><button @click=\"userMenuOpen = !userMenuOpen\" class=\"flex items-center space-x-2 focus:outline-none\"><div class=\"h-7 w-7 rounded-full bg-yellow-600 dark:bg-yellow-500 flex items-center justify-center text-white dark:text-gray-600 text-sm font-medium\">")
+		templ_7745c5c3_Err = slideTransitionCSS().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script src=\"https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js\" integrity=\"sha384-ZBXiYtYQ6hJ2Y0ZNoYuI+Nq5MqWBr+chMrS/RkXpNzQCApHEhOt2aY8EJgqwHLkJ\" crossorigin=\"anonymous\"></script><script defer src=\"https://cdn.jsdelivr.net/npm/alpinejs@3.5.0/dist/cdn.min.js\"></script></head><body class=\"bg-gray-50 dark:bg-gray-900 min-h-screen\" x-data=\"{\n\t\t\t\tuserMenuOpen: false,\n\t\t\t\tdarkMode: localStorage.getItem('theme') === 'dark' || localStorage.getItem('theme') === null,\n\n\t\t\t\ttoggleTheme() {\n\t\t\t\t\tthis.darkMode = !this.darkMode;\n\t\t\t\t\tlocalStorage.setItem('theme', this.darkMode ? 'dark' : 'light');\n\t\t\t\t\tthis.darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark');\n\t\t\t\t}\n\t\t\t}\" x-init=\"darkMode ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark')\"><!-- Navbar --><nav class=\"bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800\"><div class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8\"><div class=\"flex justify-between h-14\"><!-- Logo --><div class=\"flex items-center\"><div class=\"flex-shrink-0 flex items-center\"><a href=\"https://github.com/Effiware/cloak-apps\"><img class=\"h-14 w-14 text-blue-600 dark:text-blue-400\" src=\"/static/img/launcher-stack.svg\" alt=\"CloakApps Logo\"></a><div class=\"ml-2\"><span class=\"text-lg font-medium text-gray-900 dark:text-white\"><a href=\"https://github.com/Effiware/cloak-apps\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(getInitials(userInfo.Name))
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(organization.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 88, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 89, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><!-- Dropdown Menu --><div x-show=\"userMenuOpen\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-50\"><div class=\"px-4 py-2 border-b border-gray-100 dark:border-gray-700\"><p class=\"text-sm font-medium text-gray-900 dark:text-white\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, " Apps</a></span><p class=\"font-extralight text-xs text-gray-900 dark:text-white\">powered by <a class=\"text-yellow-600 dark:text-yellow-400\" href=\"https://effiware.com\"><u>Effiware</u></a></p></div></div></div><!-- Right side: Dark mode toggle and User menu --><div class=\"flex items-center space-x-4\"><!-- Dark Mode Toggle --><button @click=\"toggleTheme()\" class=\"p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors\" title=\"Toggle dark mode\"><!-- Sun Icon (shown in dark mode) --><svg x-show=\"darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg><!-- Moon Icon (shown in light mode) --><svg x-show=\"!darkMode\" class=\"h-5 w-5 text-gray-600 dark:text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button><!-- User Menu --><div class=\"relative\" @click.away=\"userMenuOpen = false\"><button @click=\"userMenuOpen = !userMenuOpen\" class=\"flex items-center space-x-2 focus:outline-none\"><div class=\"h-7 w-7 rounded-full bg-yellow-600 dark:bg-yellow-500 flex items-center justify-center text-white dark:text-gray-600 text-sm font-medium\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Name)
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(getInitials(userInfo.Name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 106, Col: 86}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 118, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p><p class=\"text-xs text-gray-500 dark:text-gray-400\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><svg class=\"h-4 w-4 text-gray-400\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M19 9l-7 7-7-7\"></path></svg></button><!-- Dropdown Menu --><div x-show=\"userMenuOpen\" x-transition:enter=\"transition ease-out duration-100\" x-transition:enter-start=\"transform opacity-0 scale-95\" x-transition:enter-end=\"transform opacity-100 scale-100\" x-transition:leave=\"transition ease-in duration-75\" x-transition:leave-start=\"transform opacity-100 scale-100\" x-transition:leave-end=\"transform opacity-0 scale-95\" class=\"absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 border border-gray-200 dark:border-gray-700 z-50\"><div class=\"px-4 py-2 border-b border-gray-100 dark:border-gray-700\"><p class=\"text-sm font-medium text-gray-900 dark:text-white\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Email)
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 107, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 136, Col: 86}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</p></div><a href=\"/auth/logout\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700\">Sign out</a></div></div></div></div></div></nav><!-- Main Content --><main class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\"><!-- Header --><div class=\"mb-8\"><div class=\"flex items-start justify-between mb-6\"><div><h1 class=\"text-2xl font-semibold text-gray-900 dark:text-white\">My ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</p><p class=\"text-xs text-gray-500 dark:text-gray-400\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(organization.Name)
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(userInfo.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 123, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 137, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " Applications</h1><p class=\"mt-1 text-sm text-gray-500 dark:text-gray-400\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</p></div><a href=\"/auth/logout\" class=\"block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-t border-gray-100 dark:border-gray-700\">Sign out</a></div></div></div></div></div></nav><!-- Main Content --><main class=\"max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\"><!-- Header --><div class=\"mb-8\"><div class=\"flex items-start justify-between mb-6\"><div><h1 class=\"text-2xl font-semibold text-gray-900 dark:text-white\">My ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(organization.Name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 153, Col: 94}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " Applications</h1><p class=\"mt-1 text-sm text-gray-500 dark:text-gray-400\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if organization.CustomDescription != "" {
-			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(organization.CustomDescription)
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(organization.CustomDescription)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 126, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/index.templ`, Line: 156, Col: 41}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "Access all your authorized applications/services and manage them using RBAC - all done in one place (Keycloak)!")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "Access all your authorized applications/services and manage them using RBAC - all done in one place (Keycloak)!")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p></div></div></div><!-- Loading spinner (persists across HTMX swaps) --><div id=\"loading-spinner\" class=\"htmx-indicator\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p></div></div></div><!-- Loading spinner (persists across HTMX swaps) --><div id=\"loading-spinner\" class=\"htmx-indicator\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -140,7 +177,7 @@ func Index(userInfo *middlewares.UserInfo, organization models.Organization) tem
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div><!-- Applications Container (loaded via HTMX) --><div id=\"applications-container\" hx-get=\"/hda/applications?view=card\" hx-trigger=\"load\" hx-swap=\"innerHTML\" hx-indicator=\"#loading-spinner\"></div></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><!-- Applications Container (loaded via HTMX) --><div id=\"applications-container\" hx-get=\"/hda/applications?view=card\" hx-trigger=\"load\" hx-swap=\"innerHTML transition:true\" hx-indicator=\"#loading-spinner\"></div></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
