@@ -29,7 +29,7 @@ func LoadingSpinner() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"w-48 h-1 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden mx-auto my-8 animate-[fadeIn_0s_ease-in_200ms_forwards] opacity-0\"><div class=\"h-full bg-yellow-600 dark:bg-yellow-500 rounded animate-[loading_1s_ease-in-out_infinite]\" style=\"width: 30%;\"></div></div><style>\n\t\t@keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }\n\t\t@keyframes fadeIn { to { opacity: 1; } }\n\t</style>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"w-48 h-1 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden mx-auto my-2 animate-[fadeIn_0s_ease-in_200ms_forwards] opacity-0\"><div class=\"h-full bg-yellow-600 dark:bg-yellow-500 rounded animate-[loading_1s_ease-in-out_infinite]\" style=\"width: 30%;\"></div></div><style>\n\t\t@keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }\n\t\t@keyframes fadeIn { to { opacity: 1; } }\n\t</style>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -24,7 +24,12 @@ templ AppListItem(app models.Application) {
 					}
 				</div>
 				<div class="flex-1 min-w-0">
-					<h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{ app.Name }</h3>
+					<h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+						{ app.Name }
+						if !app.SSOEnabled {
+							<span class="ml-1.5 inline-flex items-center px-1 py-px rounded text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">No SSO</span>
+						}
+					</h3>
 					<p class="text-xs text-gray-500 dark:text-gray-400">{ app.Description }</p>
 				</div>
 				<div class="flex-shrink-0">
