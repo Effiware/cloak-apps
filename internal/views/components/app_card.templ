@@ -6,7 +6,7 @@ import (
 
 templ AppCard(app models.Application) {
 	<a href={ templ.SafeURL(app.URL) } target="_blank" class="block group">
-		<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-28">
+		<div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm transition-all h-24">
 			<div class="flex items-start space-x-3 h-full">
 				<div class="flex-shrink-0">
 					if app.ThumbnailURL != "" {
@@ -27,7 +27,7 @@ templ AppCard(app models.Application) {
 					<h3 class="text-sm font-medium text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
 						{ app.Name }
 						if !app.SSOEnabled {
-							<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">No SSO</span>
+							<span class="ml-1.5 inline-flex items-center px-1 py-px rounded text-[10px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">No SSO</span>
 						}
 					</h3>
 					<p class="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2" title={ app.Tooltip }>{ app.Description }</p>

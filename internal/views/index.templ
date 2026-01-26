@@ -162,19 +162,17 @@ templ Index(userInfo *middlewares.UserInfo, organization models.Organization) {
 					</div>
 				</div>
 
-				<!-- Loading spinner (persists across HTMX swaps) -->
 				<div id="loading-spinner" class="htmx-indicator">
 					@components.LoadingSpinner()
 				</div>
 
-				<!-- Applications Container (loaded via HTMX) -->
 				<div
 					id="applications-container"
 					hx-get="/hda/applications?view=card"
 					hx-trigger="load"
-					hx-swap="innerHTML transition:true"
-					hx-indicator="#loading-spinner">
+					hx-swap="innerHTML transition:true">
 				</div>
+
 			</main>
 		</body>
 	</html>

@@ -169,7 +169,7 @@ func Index(userInfo *middlewares.UserInfo, organization models.Organization) tem
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p></div></div></div><!-- Loading spinner (persists across HTMX swaps) --><div id=\"loading-spinner\" class=\"htmx-indicator\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p></div></div></div><div id=\"loading-spinner\" class=\"htmx-indicator\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -177,7 +177,7 @@ func Index(userInfo *middlewares.UserInfo, organization models.Organization) tem
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><!-- Applications Container (loaded via HTMX) --><div id=\"applications-container\" hx-get=\"/hda/applications?view=card\" hx-trigger=\"load\" hx-swap=\"innerHTML transition:true\" hx-indicator=\"#loading-spinner\"></div></main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><div id=\"applications-container\" hx-get=\"/hda/applications?view=card\" hx-trigger=\"load\" hx-swap=\"innerHTML transition:true\"></div></main></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
