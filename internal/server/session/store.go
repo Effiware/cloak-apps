@@ -15,7 +15,7 @@ const SessionName = "cloak-apps-session"
 
 const (
 	sessionDir       = "/tmp/sessions" // TODO: Temporary solution to have things cleaned by OS
-	sessionMaxLength = 8192
+	sessionMaxLength = 16 * 1024
 	keyAccessToken   = "access_token"
 	keyTokenType     = "token_type"
 	keyRefreshToken  = "refresh_token"
@@ -108,7 +108,6 @@ func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.
 	}
 
 	// For CookieStore (Tier 2), only store access_token to reduce cookie size
-	// (introspection requires access_token, not id_token)
 	if s.storeType == "cookie" {
 		// Only store access_token - needed for Keycloak introspection
 		session.Values[keyAccessToken] = token.AccessToken
@@ -119,7 +118,6 @@ func (s *Store) SaveToken(w http.ResponseWriter, r *http.Request, token *oauth2.
 		session.Values[keyRefreshToken] = token.RefreshToken
 		session.Values[keyExpiry] = token.Expiry
 
-		// Store ID token if present
 		if idToken, ok := token.Extra("id_token").(string); ok {
 			session.Values[keyIDToken] = idToken
 		}
@@ -134,25 +132,19 @@ func (s *Store) GetToken(r *http.Request) (*oauth2.Token, error) {
 		return nil, err
 	}
 
+	accessToken, ok := session.Values[keyAccessToken].(string)
+	if !ok || accessToken == "" {
+		return nil, nil
+	}
+
 	// For CookieStore (Tier 2), only access_token is stored
 	if s.storeType == "cookie" {
-		accessToken, ok := session.Values[keyAccessToken].(string)
-		if !ok || accessToken == "" {
-			return nil, nil
-		}
-
 		// Return a minimal token with only access_token
 		// (introspection will be used for validation, not token.Valid())
 		token := &oauth2.Token{
 			AccessToken: accessToken,
 		}
 		return token, nil
-	}
-
-	// For filesystem/redis stores, retrieve full token
-	accessToken, ok := session.Values[keyAccessToken].(string)
-	if !ok || accessToken == "" {
-		return nil, nil
 	}
 
 	// Reconstruct token
