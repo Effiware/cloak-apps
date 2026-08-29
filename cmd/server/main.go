@@ -14,6 +14,7 @@ import (
 
 	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/keycloak"
+	"github.com/effiware/cloak-apps/internal/logging"
 	"github.com/effiware/cloak-apps/internal/server"
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
@@ -27,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -50,12 +52,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize global logger with desired level
+	// JSON to stdout with trace_id/span_id, per the instrumentation contract
 	var level slog.Level
-	if err := level.UnmarshalText([]byte(cfg.Server.LogLevel)); err == nil {
-		slog.SetLogLoggerLevel(level)
-	} else {
-		slog.Error("Error while unmarshalling log level,", "error", err)
+	levelErr := level.UnmarshalText([]byte(cfg.Server.LogLevel))
+	if levelErr != nil {
+		level = slog.LevelInfo
+	}
+	logging.Init(level)
+	if levelErr != nil {
+		slog.Warn("Invalid log level, defaulted to INFO", "error", levelErr)
 	}
 	slog.Info("Initialized slog with", "level", level)
 
@@ -75,12 +80,8 @@ func main() {
 	// Initialize TracerProvider (stored for graceful shutdown)
 	var tracerProvider *sdktrace.TracerProvider
 	if cfg.Otlp.Url != "" {
-		otlpHttpHeaders := map[string]string{
-			"content-type": "application/json",
-		}
 		otlpClientOpts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(cfg.Otlp.Url),
-			otlptracehttp.WithHeaders(otlpHttpHeaders),
 		}
 		if !cfg.Otlp.Secure {
 			otlpClientOpts = append(otlpClientOpts, otlptracehttp.WithInsecure())
@@ -97,13 +98,17 @@ func main() {
 				otlpHttpExporter,
 				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
 				sdktrace.WithBatchTimeout(sdktrace.DefaultScheduleDelay*time.Millisecond),
-				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
 			),
 			sdktrace.WithResource(otelResource),
 		)
 
 		// Set it as the global trace provider
 		otel.SetTracerProvider(tracerProvider)
+
+		// W3C traceparent on in- and outbound calls; without it OTel defaults to a no-op propagator
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{},
+		))
 		slog.Info("OTLP Trace Provider initialized,", "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure)
 	}
 

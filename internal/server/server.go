@@ -65,6 +65,8 @@ func HttpServer(
 		IdleTimeout:  idleTimeout * time.Second,
 		ReadTimeout:  readTimeout * time.Second,
 		WriteTimeout: writeTimout * time.Second,
+		// Otherwise the server writes its own errors as plain text to stderr
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 	}
 
 	server.RegisterOnShutdown(func() {

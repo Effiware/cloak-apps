@@ -131,7 +131,6 @@ func (c *Client) IntrospectToken(ctx context.Context, token string) (*Introspect
 	defer span.End()
 	start := time.Now()
 
-	slog.Debug("Introspecting token,", "token[:50]", token[:50])
 	introspBody, err := c.cachedIntrospectToken(ctx, token)
 	if err != nil {
 		span.RecordError(err)

@@ -19,8 +19,10 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
-	r.Use(middleware.Logger)
+	// otelchi first: the two below need the span in the request context
 	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
+	r.Use(mw.RequestLogger)
+	r.Use(mw.Recoverer)
 
 	// Public routes
 	r.Handle("/static/*", http.FileServer(http.FS(internal.StaticFiles)))
