@@ -24,14 +24,14 @@ func JsonHandler(endpointHandler EndpointHandlerT) http.HandlerFunc {
 
 		code, payload, err := endpointHandler(w, r)
 		if err != nil {
-			slog.Error("EndpointHandler,", "error", err)
+			slog.ErrorContext(r.Context(), "Endpoint handler failed", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		jsonPay, err := json.Marshal(payload)
 		if err != nil {
-			slog.Error("When marshaling JSON,", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to marshal JSON response", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -55,7 +55,7 @@ func GetOrganization(orgService interface {
 	return func(w http.ResponseWriter, r *http.Request) (int, any, error) {
 		organization, err := orgService.GetOrganization()
 		if err != nil {
-			slog.Error("Failed to load organization,", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to load organization", "error", err)
 			return http.StatusInternalServerError, map[string]string{"error": "failed to load organization info"}, nil
 		}
 		return http.StatusOK, organization, nil
@@ -82,7 +82,7 @@ func GetApplications(appService interface {
 
 		applications, err := appService.GetApplicationsForUser(r.Context(), userInfo)
 		if err != nil {
-			slog.Error("Failed to get applications,", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to get applications", "error", err)
 			return http.StatusInternalServerError, map[string]string{"error": "failed to fetch applications"}, nil
 		}
 

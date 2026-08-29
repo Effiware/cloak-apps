@@ -24,6 +24,7 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r.Use(middleware.Heartbeat("/ping"))
 	r.Use(otelchi.Middleware(version.ServiceName, otelchi.WithChiRoutes(r),
 		otelchi.WithFilter(func(req *http.Request) bool { return !api.IsProbePath(req) })))
+	r.Use(mw.RequestMetrics(api.IsProbePath))
 	// Inside otelchi so the panic log line and span error carry the trace context.
 	r.Use(mw.Recoverer)
 	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {

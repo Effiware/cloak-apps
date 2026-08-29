@@ -10,6 +10,7 @@ keycloak:
   redirect_uri: "http://localhost:8080/auth/callback"
 
 server:
+  name: "cloak-apps"  # service.name in traces; must equal the pod's app.kubernetes.io/name label
   port: 8080
 #  host: "localhost"
 #  timeout: 10
@@ -26,8 +27,10 @@ session:
 #  redis_url: "redis://localhost:6379/0"  # only for store: "redis"
 
 otlp:
-  url: "http://localhost:4318"
+  url: "localhost:4317"  # host:port; scheme is stripped, TLS follows otlp.secure
+  protocol: "grpc"  # "grpc" (default, :4317) or "http" (:4318)
 #  secure: false  # needed on local environment or when no HTTPS enabled
+# OTEL_EXPORTER_OTLP_ENDPOINT overrides both and is read by the SDK directly.
 
 metrics:
   enabled: true

@@ -34,7 +34,9 @@ services:
       - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}
       - CLOAKAPPS_KEYCLOAK_URL=http://keycloak:${KEYCLOAK_PORT}
       - CLOAKAPPS_KEYCLOAK_REDIRECT_URI=http://localhost:${SERVER_PORT}/auth/callback
-      - CLOAKAPPS_OTLP_URL=http://jaeger:${JAEGER_HTTP_PORT:-4318}
+      # Container port, not the host mapping. Jaeger 2.x serves OTLP on both 4317 and 4318.
+      - CLOAKAPPS_OTLP_URL=jaeger:4317
+      - CLOAKAPPS_OTLP_PROTOCOL=grpc
     volumes:
       - ./config.yaml:/app/config.yaml:ro
 

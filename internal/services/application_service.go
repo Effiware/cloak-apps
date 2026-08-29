@@ -91,7 +91,7 @@ func (as *ApplicationService) loadClientScopes(ctx context.Context) error {
 	}
 
 	span.SetAttributes(attribute.Int("scopes.count", len(as.clientScopes)))
-	slog.Debug("Loaded client scopes,", "total_number", len(as.clientScopes))
+	slog.DebugContext(ctx, "Loaded client scopes", "count", len(as.clientScopes))
 	return nil
 }
 
@@ -106,7 +106,7 @@ func (as *ApplicationService) scheduleClientScopesRefresh() {
 			case <-as.refreshTicker.C:
 				slog.Debug("Automatic client scopes refresh triggered")
 				if err := as.loadClientScopes(context.Background()); err != nil {
-					slog.Error("Error while refreshing client scopes,", "error", err)
+					slog.Error("Failed to refresh client scopes", "error", err)
 				}
 			}
 		}
@@ -131,7 +131,7 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 		return nil, fmt.Errorf("failed to get clients: %w", err)
 	}
 
-	slog.Debug("Fetching applications for", "user", userInfo.PreferredUsername, "roles", userInfo.ClientRoles)
+	slog.DebugContext(ctx, "Fetching applications", "user_sub", userInfo.Sub, "client_count", len(userInfo.ClientRoles))
 
 	var applications []models.Application
 	for _, client := range clients {
@@ -140,9 +140,9 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 		}
 
 		// Transform client to application
-		app, err := as.transformClientToApplication(&client)
+		app, err := as.transformClientToApplication(ctx, &client)
 		if err != nil {
-			slog.Debug("Failed to transform,", "client", client.ClientID, "error", err)
+			slog.DebugContext(ctx, "Failed to transform client", "client", client.ClientID, "error", err)
 			continue
 		}
 
@@ -150,9 +150,9 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 		if roles, hasRoles := userInfo.ClientRoles[client.ClientID]; hasRoles && len(roles) > 0 {
 			app.HasAccess = true
 			applications = append(applications, *app)
-			slog.Debug("Access GRANTED for", "client", client.ClientID, "roles", roles)
+			slog.DebugContext(ctx, "Access granted", "client", client.ClientID, "roles", roles)
 		} else {
-			slog.Debug("Access DENIED for", "client", client.ClientID, "roles", roles)
+			slog.DebugContext(ctx, "Access denied", "client", client.ClientID, "roles", roles)
 		}
 	}
 
@@ -160,15 +160,15 @@ func (as *ApplicationService) GetApplicationsForUser(ctx context.Context, userIn
 	applicationsFetchCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 	applicationsFetchDuration.Record(ctx, time.Since(start).Seconds(),
 		metric.WithAttributes(attribute.String("status", "success")))
-	slog.Debug("Found accessible applications for", "user", userInfo.PreferredUsername, "applications", len(applications))
+	slog.DebugContext(ctx, "Found accessible applications", "user_sub", userInfo.Sub, "count", len(applications))
 	return applications, nil
 }
 
 // transformClientToApplication converts Keycloak client to Application model
-func (as *ApplicationService) transformClientToApplication(client *keycloak.ClientRepresentation) (*models.Application, error) {
+func (as *ApplicationService) transformClientToApplication(ctx context.Context, client *keycloak.ClientRepresentation) (*models.Application, error) {
 	metadata, err := keycloak.ParseDescriptionJSON(client.Description)
 	if err != nil {
-		slog.Warn("Failed to parse description for", "client", client.ClientID, "error", err)
+		slog.WarnContext(ctx, "Failed to parse client description", "client", client.ClientID, "error", err)
 		// Use fallback - default to SSO disabled for safety
 		metadata = &keycloak.DescriptionMetadata{
 			Text:       client.Description,
@@ -180,18 +180,16 @@ func (as *ApplicationService) transformClientToApplication(client *keycloak.Clie
 	space := as.extractScopeCategory(client.OptionalClientScopes, "space-")
 	environment := as.extractScopeCategory(client.OptionalClientScopes, "env-")
 
-	// Debug logging for metadata extraction
-	slog.Debug("-->", "Client", client.ClientID, "OptionalClientScopes", client.OptionalClientScopes)
-	slog.Debug("-->", "Client", client.ClientID, "Space", space, "Environment", environment)
-
 	// Extract thumbnail URL from attributes
 	thumbnailURL := ""
 	if client.Attributes != nil {
 		// Keycloak uses 'logoUri' not 'logoUrl'
 		thumbnailURL = client.Attributes["logoUri"]
 	}
-	slog.Debug("-->", "Client", client.ClientID, "ThumbnailURL", thumbnailURL)
-	slog.Debug("-->", "Client", client.ClientID, "SSOEnabled", metadata.SSOEnabled, "URL", client.BaseURL)
+
+	slog.DebugContext(ctx, "Transformed client", "client", client.ClientID,
+		"optional_scopes", client.OptionalClientScopes, "space", space, "env", environment,
+		"thumbnail_url", thumbnailURL, "sso_enabled", metadata.SSOEnabled, "url", client.BaseURL)
 
 	return &models.Application{
 		ID:           client.ID,

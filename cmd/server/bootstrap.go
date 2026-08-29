@@ -5,9 +5,24 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/version"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
+	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -15,10 +30,10 @@ var containerID string //nolint:gochecknoglobals
 
 // getContainerID returns HOSTNAME (the container ID under K8s/Docker); memoized so
 // the log `instance` field and the trace resource agree.
-func getContainerID() string {
+func getContainerID(defaultName string) string {
 	if containerID == "" {
 		if containerID = os.Getenv("HOSTNAME"); containerID == "" {
-			containerID = version.ServiceName + "-local"
+			containerID = defaultName + "-local"
 		}
 	}
 	return containerID
@@ -50,13 +65,135 @@ func bootLogger(cfg *config.Config) {
 	}
 	handler := traceHandler{slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})}
 	slog.SetDefault(slog.New(handler).With(
-		"service", serviceName(), "env", cfg.Server.Environment, "instance", getContainerID()))
+		"service", serviceName(cfg), "env", cfg.Server.Environment, "instance", getContainerID(cfg.Server.Name)))
 	slog.Info("Initialized slog with", "level", level)
 }
 
 // serviceName resolves service identity for traces AND logs: the standard
-// OTEL_SERVICE_NAME wins over the build-time name — the SDK resource builder never reads it.
+// OTEL_SERVICE_NAME wins over config — the SDK resource builder never reads it.
 // It must equal the pod's app.kubernetes.io/name label or Grafana's trace→logs link breaks.
-func serviceName() string {
-	return cmp.Or(os.Getenv("OTEL_SERVICE_NAME"), version.ServiceName)
+func serviceName(cfg *config.Config) string {
+	return cmp.Or(os.Getenv("OTEL_SERVICE_NAME"), cfg.Server.Name)
+}
+
+// otlpEndpointFromEnv reports whether the standard OTLP endpoint env is set — then
+// the exporter gets no endpoint/TLS options (the env URL's scheme decides TLS).
+func otlpEndpointFromEnv() bool {
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" ||
+		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != ""
+}
+
+// bootOtelResource builds the resource shared by the tracer and meter providers.
+func bootOtelResource(cfg *config.Config) *resource.Resource {
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceNameKey.String(serviceName(cfg)),
+		semconv.ServiceVersionKey.String(version.Version),
+		attribute.String("vcs.ref.head.revision", version.BuildHash), // not yet in semconv/v1.26.0
+		semconv.DeploymentEnvironmentKey.String(cfg.Server.Environment),
+		semconv.ContainerIDKey.String(getContainerID(cfg.Server.Name)),
+		semconv.TelemetrySDKLanguageGo,
+		semconv.TelemetrySDKNameKey.String("opentelemetry"),
+		semconv.TelemetrySDKVersionKey.String("1.26.0"),
+	)
+	// Honor OTEL_RESOURCE_ATTRIBUTES on top; on schema conflict keep our resource.
+	if merged, err := resource.Merge(res, resource.Environment()); err == nil {
+		res = merged
+	}
+	return res
+}
+
+// bootOtel initializes tracing and sets the global provider. Returns nil (tracing
+// off) when neither otlp.url nor the OTEL_* endpoint env is set.
+func bootOtel(cfg *config.Config, otelResource *resource.Resource) *sdktrace.TracerProvider {
+	envEndpoint := otlpEndpointFromEnv()
+	if cfg.Otlp.Url == "" && !envEndpoint {
+		return nil
+	}
+
+	var exporter sdktrace.SpanExporter
+	var err error
+	switch cfg.Otlp.Protocol {
+	case "http":
+		var opts []otlptracehttp.Option
+		if !envEndpoint {
+			opts = append(opts, otlptracehttp.WithEndpoint(cfg.Otlp.Url))
+			if !cfg.Otlp.Secure {
+				opts = append(opts, otlptracehttp.WithInsecure())
+			}
+		}
+		exporter, err = otlptracehttp.New(context.Background(), opts...)
+	default: // grpc
+		var opts []otlptracegrpc.Option
+		if !envEndpoint {
+			opts = append(opts, otlptracegrpc.WithEndpoint(cfg.Otlp.Url))
+			if !cfg.Otlp.Secure {
+				opts = append(opts, otlptracegrpc.WithInsecure())
+			}
+		}
+		exporter, err = otlptracegrpc.New(context.Background(), opts...)
+	}
+	if err != nil {
+		slog.Error("Failed to create OTLP trace exporter", "error", err)
+		os.Exit(1)
+	}
+
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(otelResource),
+	)
+	otel.SetTracerProvider(tracerProvider)
+
+	// W3C traceparent on in- and outbound calls; without it OTel defaults to a no-op propagator
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	))
+
+	// The batch exporter drops spans silently on failure — log it, max once per 30 s.
+	var lastErrLog atomic.Int64
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		now := time.Now().Unix()
+		if last := lastErrLog.Load(); now-last >= 30 && lastErrLog.CompareAndSwap(last, now) {
+			slog.Error("OTel export error", "error", err)
+		}
+	}))
+
+	// Self-check span: forces one export attempt after boot so a dead pipeline is loud.
+	_, span := tracerProvider.Tracer(version.ServiceName).Start(context.Background(), "otel.selfcheck")
+	span.End()
+
+	slog.Info("OTLP trace provider initialized",
+		"protocol", cfg.Otlp.Protocol, "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure, "endpoint_from_env", envEndpoint)
+
+	return tracerProvider
+}
+
+// bootMeter initializes metrics behind a Prometheus exporter and sets the global
+// provider. Returns nils when metrics are disabled.
+func bootMeter(cfg *config.Config, otelResource *resource.Resource) (*sdkmetric.MeterProvider, *prometheus.Registry) {
+	if !cfg.Metrics.Enabled {
+		return nil, nil
+	}
+
+	registry := prometheus.NewRegistry()
+	// Standard go_* / process_* families — a custom registry starts empty.
+	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	exporter, err := otelprometheus.New(
+		otelprometheus.WithRegisterer(registry),
+		otelprometheus.WithoutScopeInfo(),
+		otelprometheus.WithNamespace(strings.ReplaceAll(cfg.Server.Name, "-", "_")),
+	)
+	if err != nil {
+		slog.Error("Failed to create Prometheus exporter", "error", err)
+		os.Exit(1)
+	}
+
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(otelResource),
+		sdkmetric.WithReader(exporter),
+	)
+	otel.SetMeterProvider(meterProvider)
+	slog.Info("Prometheus MeterProvider initialized")
+
+	return meterProvider, registry
 }
