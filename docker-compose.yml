@@ -7,6 +7,15 @@ volumes:
   keycloak-db:
     labels:
       - "dev.cloakapps.description=Keycloak own database storage"
+  loki-data:
+    labels:
+      - "dev.cloakapps.description=Loki chunks and index"
+  tempo-data:
+    labels:
+      - "dev.cloakapps.description=Tempo trace blocks"
+  grafana-data:
+    labels:
+      - "dev.cloakapps.description=Grafana dashboards and preferences"
 
 services:
   cloak-apps:
@@ -24,8 +33,14 @@ services:
       - whole
     depends_on:
       - keycloak
+      - alloy
     networks:
       - cloak-apps-net
+    # Alloy reads these to build the Loki labels, exactly as it reads the pod's
+    # app.kubernetes.io/name and namespace in the cluster.
+    labels:
+      app.kubernetes.io/name: cloak-apps
+      namespace: ${LOG_NAMESPACE:-dev-v1}
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
       - "${TEMPL_PROXY_PORT}:${TEMPL_PROXY_PORT}"
@@ -34,9 +49,11 @@ services:
       - CLOAKAPPS_SERVER_PORT=${SERVER_PORT}
       - CLOAKAPPS_KEYCLOAK_URL=http://keycloak:${KEYCLOAK_PORT}
       - CLOAKAPPS_KEYCLOAK_REDIRECT_URI=http://localhost:${SERVER_PORT}/auth/callback
-      # Container port, not the host mapping. Jaeger 2.x serves OTLP on both 4317 and 4318.
-      - CLOAKAPPS_OTLP_URL=jaeger:4317
+      # Alloy is the only collector — never point at Tempo directly.
+      - CLOAKAPPS_OTLP_URL=alloy:4317
       - CLOAKAPPS_OTLP_PROTOCOL=grpc
+      - CLOAKAPPS_OTLP_SECURE=false
+      - OTEL_SERVICE_NAME=cloak-apps
     volumes:
       - ./config.yaml:/app/config.yaml:ro
 
@@ -87,20 +104,80 @@ services:
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: STRONG_DB_PASSWORD2
 
-  jaeger:
-    image: jaegertracing/jaeger:2.14.1
-    container_name: cloak-apps-jaeger
+  alloy:
+    image: grafana/alloy:v1.18.1
+    container_name: cloak-apps-alloy
     restart: unless-stopped
     profiles:
       - whole
-    depends_on:
-      - keycloak
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     ports:
-      - "${JAEGER_UI_PORT}:16686"
-      - "${JAEGER_GRPC_PORT:-4317}:4317"
-      - "${JAEGER_HTTP_PORT:-4318}:4318"
+      - "${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_PORT:-4318}:4318"
+      - "${ALLOY_PORT:-8087}:12345"
+    volumes:
+      - ./_alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Read-only: Alloy discovers containers and tails their stdout.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+      - tempo
+    networks:
+      - cloak-apps-net
+
+  loki:
+    image: grafana/loki:3.7.6
+    container_name: cloak-apps-loki
+    restart: unless-stopped
+    profiles:
+      - whole
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "${LOKI_PORT:-8085}:3100"
+    volumes:
+      - ./_loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    networks:
+      - cloak-apps-net
+
+  tempo:
+    image: grafana/tempo:2.10.8
+    container_name: cloak-apps-tempo
+    restart: unless-stopped
+    profiles:
+      - whole
+    command: -config.file=/etc/tempo/tempo.yaml
+    ports:
+      - "${TEMPO_PORT:-8086}:3200"
+    volumes:
+      - ./_tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - cloak-apps-net
+
+  grafana:
+    image: grafana/grafana:12.3.0
+    container_name: cloak-apps-grafana
+    restart: unless-stopped
+    profiles:
+      - whole
+    ports:
+      - "${GRAFANA_PORT:-8083}:3000"
+    volumes:
+      - ./_grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
     environment:
-      - LOG_LEVEL=debug
+      # Local only: the cluster's Grafana is behind SSO.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    depends_on:
+      - loki
+      - tempo
     networks:
       - cloak-apps-net
 
@@ -113,7 +190,7 @@ services:
     ports:
       - "${PROMETHEUS_PORT}:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./_prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--web.enable-lifecycle'
