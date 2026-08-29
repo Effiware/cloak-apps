@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/effiware/cloak-apps/internal"
@@ -8,6 +10,7 @@ import (
 	"github.com/effiware/cloak-apps/internal/server/api"
 	"github.com/effiware/cloak-apps/internal/server/hda"
 	mw "github.com/effiware/cloak-apps/internal/server/middlewares"
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,10 +22,13 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
-	// otelchi first: the two below need the span in the request context
-	r.Use(otelchi.Middleware("cloak-apps", otelchi.WithChiRoutes(r)))
-	r.Use(mw.RequestLogger)
+	r.Use(otelchi.Middleware(version.ServiceName, otelchi.WithChiRoutes(r),
+		otelchi.WithFilter(func(req *http.Request) bool { return !api.IsProbePath(req) })))
+	// Inside otelchi so the panic log line and span error carry the trace context.
 	r.Use(mw.Recoverer)
+	if slog.Default().Enabled(context.Background(), slog.LevelDebug) {
+		r.Use(mw.RequestLogger)
+	}
 
 	// Public routes
 	r.Handle("/static/*", http.FileServer(http.FS(internal.StaticFiles)))

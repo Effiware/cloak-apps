@@ -7,6 +7,7 @@ import (
 
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/session"
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/mitchellh/mapstructure"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -14,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var tracer = otel.Tracer("cloak-apps")
+var tracer = otel.Tracer(version.ServiceName)
 
 type contextKey string
 

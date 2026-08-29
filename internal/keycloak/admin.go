@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/effiware/cloak-apps/utils"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -24,7 +25,7 @@ import (
 )
 
 var (
-	tracer = otel.Tracer("cloak-apps")
+	tracer = otel.Tracer(version.ServiceName)
 
 	// Metrics instruments (initialized via InitAdminMetrics after MeterProvider is set)
 	tokenRefreshCounter metric.Int64Counter
@@ -33,7 +34,7 @@ var (
 
 // InitAdminMetrics initializes metrics instruments. Must be called after MeterProvider is set.
 func InitAdminMetrics() {
-	meter := otel.Meter("cloak-apps")
+	meter := otel.Meter(version.ServiceName)
 	var err error
 
 	tokenRefreshCounter, err = meter.Int64Counter(

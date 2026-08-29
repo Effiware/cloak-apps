@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/effiware/cloak-apps/internal/version"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -27,7 +28,7 @@ var (
 
 // InitCacheMetrics initializes metrics instruments. Must be called after MeterProvider is set.
 func InitCacheMetrics() {
-	meter := otel.Meter("cloak-apps")
+	meter := otel.Meter(version.ServiceName)
 	var err error
 
 	cacheOperationsCounter, err = meter.Int64Counter(

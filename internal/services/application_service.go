@@ -10,6 +10,7 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/models"
+	"github.com/effiware/cloak-apps/internal/version"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -17,7 +18,7 @@ import (
 )
 
 var (
-	tracer = otel.Tracer("cloak-apps") //nolint:gochecknoglobals
+	tracer = otel.Tracer(version.ServiceName) //nolint:gochecknoglobals
 
 	// Metrics instruments (initialized via InitApplicationMetrics after MeterProvider is set)
 	applicationsFetchDuration metric.Float64Histogram
@@ -26,7 +27,7 @@ var (
 
 // InitApplicationMetrics initializes metrics instruments. Must be called after MeterProvider is set.
 func InitApplicationMetrics() {
-	meter := otel.Meter("cloak-apps")
+	meter := otel.Meter(version.ServiceName)
 	var err error
 
 	applicationsFetchDuration, err = meter.Float64Histogram(

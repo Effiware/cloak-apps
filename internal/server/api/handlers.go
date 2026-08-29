@@ -13,6 +13,11 @@ import (
 
 type EndpointHandlerT func(w http.ResponseWriter, request *http.Request) (int, any, error)
 
+// IsProbePath keeps probes and metric scrapes out of traces — they'd dominate span volume.
+func IsProbePath(r *http.Request) bool {
+	return r.URL.Path == "/ping" || r.URL.Path == "/metrics"
+}
+
 func JsonHandler(endpointHandler EndpointHandlerT) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

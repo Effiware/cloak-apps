@@ -14,7 +14,6 @@ import (
 
 	"github.com/effiware/cloak-apps/internal/config"
 	"github.com/effiware/cloak-apps/internal/keycloak"
-	"github.com/effiware/cloak-apps/internal/logging"
 	"github.com/effiware/cloak-apps/internal/server"
 	"github.com/effiware/cloak-apps/internal/server/auth"
 	"github.com/effiware/cloak-apps/internal/server/session"
@@ -35,16 +34,6 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-const serviceName = "cloak-apps"
-
-// getContainerID returns the HOSTNAME env var (container ID in K8s/Docker)
-func getContainerID() string {
-	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
-		return hostname
-	}
-	return serviceName + "-local"
-}
-
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -52,22 +41,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// JSON to stdout with trace_id/span_id, per the instrumentation contract
-	var level slog.Level
-	levelErr := level.UnmarshalText([]byte(cfg.Server.LogLevel))
-	if levelErr != nil {
-		level = slog.LevelInfo
-	}
-	logging.Init(level)
-	if levelErr != nil {
-		slog.Warn("Invalid log level, defaulted to INFO", "error", levelErr)
-	}
-	slog.Info("Initialized slog with", "level", level)
+	bootLogger(cfg)
 
 	// Create shared OTel resource for both tracing and metrics
 	otelResource := resource.NewWithAttributes(
 		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(serviceName),
+		semconv.ServiceNameKey.String(serviceName()),
 		semconv.ServiceVersionKey.String(version.Version),
 		attribute.String("vcs.ref.head.revision", version.BuildHash), // not yet in semconv/v1.26.0
 		semconv.DeploymentEnvironmentKey.String(cfg.Server.Environment),

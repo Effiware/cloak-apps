@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/effiware/cloak-apps/utils"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -26,7 +27,7 @@ var (
 
 // InitIntrospectionMetrics initializes metrics instruments. Must be called after MeterProvider is set.
 func InitIntrospectionMetrics() {
-	meter := otel.Meter("cloak-apps")
+	meter := otel.Meter(version.ServiceName)
 	var err error
 
 	introspectionCounter, err = meter.Int64Counter(

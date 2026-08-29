@@ -10,13 +10,14 @@ import (
 	"github.com/effiware/cloak-apps/internal/keycloak"
 	"github.com/effiware/cloak-apps/internal/server/middlewares"
 	"github.com/effiware/cloak-apps/internal/server/session"
+	"github.com/effiware/cloak-apps/internal/version"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/oauth2"
 )
 
-var tracer = otel.Tracer("cloak-apps")
+var tracer = otel.Tracer(version.ServiceName)
 
 type Handlers struct {
 	keycloakClient *keycloak.Client
