@@ -69,7 +69,8 @@ func TestBootOtelDisabled(t *testing.T) {
 // traceparent ever leaves the process — silently, with traces still looking healthy.
 func TestBootOtelSetsPropagator(t *testing.T) {
 	cfg := testConfig()
-	cfg.Otlp.Url = "127.0.0.1:4317"
+	// Not :4317 — a local collector would otherwise ingest spans from every test run.
+	cfg.Otlp.Url = "127.0.0.1:14317"
 	tracerProvider := bootOtel(cfg, bootOtelResource(cfg))
 	if tracerProvider == nil {
 		t.Fatal("expected a TracerProvider")

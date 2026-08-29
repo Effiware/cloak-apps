@@ -22,7 +22,10 @@ func (hdaAndApi *HdaAndApi) RegisterRoutes() *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Heartbeat("/ping"))
+	// WithRequestMethodInSpanName gives the contract's "GET /route/{id}" form; WithChiRoutes
+	// keeps it the route template rather than the resolved path.
 	r.Use(otelchi.Middleware(version.ServiceName, otelchi.WithChiRoutes(r),
+		otelchi.WithRequestMethodInSpanName(true),
 		otelchi.WithFilter(func(req *http.Request) bool { return !api.IsProbePath(req) })))
 	r.Use(mw.RequestMetrics(api.IsProbePath))
 	// Inside otelchi so the panic log line and span error carry the trace context.
