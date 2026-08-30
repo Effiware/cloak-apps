@@ -20,125 +20,27 @@ import (
 	"github.com/effiware/cloak-apps/internal/services"
 	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/effiware/cloak-apps/utils"
-	"go.opentelemetry.io/otel/attribute"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
-
-const serviceName = "cloak-apps"
-
-// getContainerID returns the HOSTNAME env var (container ID in K8s/Docker)
-func getContainerID() string {
-	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
-		return hostname
-	}
-	return serviceName + "-local"
-}
 
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		slog.Error("Failed to load configuration file,", "error", err)
+		slog.Error("Failed to load configuration file", "error", err)
 		os.Exit(1)
 	}
 
-	// Initialize global logger with desired level
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(cfg.Server.LogLevel)); err == nil {
-		slog.SetLogLoggerLevel(level)
-	} else {
-		slog.Error("Error while unmarshalling log level,", "error", err)
-	}
-	slog.Info("Initialized slog with", "level", level)
+	bootLogger(cfg)
 
-	// Create shared OTel resource for both tracing and metrics
-	otelResource := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(serviceName),
-		semconv.ServiceVersionKey.String(version.Version),
-		attribute.String("vcs.ref.head.revision", version.BuildHash), // not yet in semconv/v1.26.0
-		semconv.DeploymentEnvironmentKey.String(cfg.Server.Environment),
-		semconv.ContainerIDKey.String(getContainerID()),
-		semconv.TelemetrySDKLanguageGo,
-		semconv.TelemetrySDKNameKey.String("opentelemetry"),
-		semconv.TelemetrySDKVersionKey.String("1.26.0"),
-	)
+	otelResource := bootOtelResource(cfg)
+	tracerProvider := bootOtel(cfg, otelResource)
+	meterProvider, prometheusRegistry := bootMeter(cfg, otelResource)
 
-	// Initialize TracerProvider (stored for graceful shutdown)
-	var tracerProvider *sdktrace.TracerProvider
-	if cfg.Otlp.Url != "" {
-		otlpHttpHeaders := map[string]string{
-			"content-type": "application/json",
-		}
-		otlpClientOpts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(cfg.Otlp.Url),
-			otlptracehttp.WithHeaders(otlpHttpHeaders),
-		}
-		if !cfg.Otlp.Secure {
-			otlpClientOpts = append(otlpClientOpts, otlptracehttp.WithInsecure())
-		}
-
-		otlpHttpExporter, err := otlptrace.New(context.Background(), otlptracehttp.NewClient(otlpClientOpts...))
-		if err != nil {
-			slog.Error("Failed to create OTLP trace exporter,", "error", err)
-			os.Exit(1)
-		}
-
-		tracerProvider = sdktrace.NewTracerProvider(
-			sdktrace.WithBatcher(
-				otlpHttpExporter,
-				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
-				sdktrace.WithBatchTimeout(sdktrace.DefaultScheduleDelay*time.Millisecond),
-				sdktrace.WithMaxExportBatchSize(sdktrace.DefaultMaxExportBatchSize),
-			),
-			sdktrace.WithResource(otelResource),
-		)
-
-		// Set it as the global trace provider
-		otel.SetTracerProvider(tracerProvider)
-		slog.Info("OTLP Trace Provider initialized,", "url", cfg.Otlp.Url, "secure", cfg.Otlp.Secure)
-	}
-
-	// Initialize MeterProvider with Prometheus exporter (stored for graceful shutdown)
-	var meterProvider *sdkmetric.MeterProvider
-	var prometheusRegistry *prometheus.Registry
-	if cfg.Metrics.Enabled {
-		prometheusRegistry = prometheus.NewRegistry()
-
-		prometheusExporter, err := otelprometheus.New(
-			otelprometheus.WithRegisterer(prometheusRegistry),
-			otelprometheus.WithoutScopeInfo(),
-			otelprometheus.WithNamespace("cloakapps"),
-		)
-		if err != nil {
-			slog.Error("Failed to create Prometheus exporter,", "error", err)
-			os.Exit(1)
-		}
-
-		meterProvider = sdkmetric.NewMeterProvider(
-			sdkmetric.WithResource(otelResource),
-			sdkmetric.WithReader(prometheusExporter),
-		)
-
-		// Set it as the global meter provider
-		otel.SetMeterProvider(meterProvider)
-
-		// Initialize metrics instruments now that MeterProvider is set
-		keycloak.InitAdminMetrics()
-		keycloak.InitIntrospectionMetrics()
-		services.InitApplicationMetrics()
-		utils.InitCacheMetrics()
-
-		slog.Info("Prometheus MeterProvider initialized")
-	}
+	// Unconditional: with metrics off these bind to the global no-op meter. Skipping
+	// them would leave the package-level instruments nil and panic on first use.
+	keycloak.InitAdminMetrics()
+	keycloak.InitIntrospectionMetrics()
+	services.InitApplicationMetrics()
+	utils.InitCacheMetrics()
 
 	keycloakClient, err := keycloak.NewClient(
 		context.Background(),
@@ -149,10 +51,10 @@ func main() {
 		cfg.Keycloak.RedirectUri,
 	)
 	if err != nil {
-		slog.Error("Failed to create Keycloak client,", "error", err)
+		slog.Error("Failed to create Keycloak client", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Keycloak client initialized for", "realm", cfg.Keycloak.Realm)
+	slog.Info("Keycloak client initialized", "realm", cfg.Keycloak.Realm)
 
 	// Enable token introspection for cookie store (required for Tier 2)
 	if cfg.Session.Store == "cookie" {
@@ -168,7 +70,7 @@ func main() {
 		RedisURL:  cfg.Session.RedisURL,
 	})
 	if err != nil {
-		slog.Error("Failed to create session store,", "error", err)
+		slog.Error("Failed to create session store", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("Session store initialized", "type", cfg.Session.Store, "max_age", cfg.Session.MaxAge, "secure", cfg.Session.Secure)
@@ -182,7 +84,7 @@ func main() {
 		Description: cfg.Organization.CustomDescription,
 	})
 	if err != nil {
-		slog.Error("Failed to create organization service,", "error", err)
+		slog.Error("Failed to create organization service", "error", err)
 		os.Exit(1)
 	}
 
@@ -190,7 +92,7 @@ func main() {
 		keycloakClient.AdminClient, cfg.Keycloak.ClientId, cfg.Server.RefreshIntervalMin,
 	)
 	if err != nil {
-		slog.Error("Failed to create application service,", "error", err)
+		slog.Error("Failed to create application service", "error", err)
 		os.Exit(1)
 	}
 
@@ -208,9 +110,9 @@ func main() {
 		!slices.Contains([]string{"production", "prod"}, strings.ToLower(cfg.Server.Environment)),
 	)
 
-	slog.Info("Starting server,", "address", httpServer.Addr, "version", version.Version, "build", version.BuildHash)
-	slog.Info("Keycloak", "URL", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
-	slog.Info("Redirect", "URI", cfg.Keycloak.RedirectUri)
+	slog.Info("Starting server", "address", httpServer.Addr, "version", version.Version, "build", version.BuildHash)
+	slog.Info("Keycloak issuer configured", "url", cfg.Keycloak.Url+"/realms/"+cfg.Keycloak.Realm)
+	slog.Info("OAuth redirect configured", "redirect_uri", cfg.Keycloak.RedirectUri)
 
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)

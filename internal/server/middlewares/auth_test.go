@@ -28,7 +28,7 @@ func TestBuildUserInfoFromClaims_CompleteUserInfo(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -50,7 +50,7 @@ func TestBuildUserInfoFromClaims_MinimalClaims(t *testing.T) {
 		"preferred_username": "johndoe",
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -68,7 +68,7 @@ func TestBuildUserInfoFromClaims_MinimalClaims(t *testing.T) {
 func TestBuildUserInfoFromClaims_EmptyClaims(t *testing.T) {
 	claims := map[string]interface{}{}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "", userInfo.Sub)
@@ -86,7 +86,7 @@ func TestBuildUserInfoFromClaims_EmptyRealmRoles(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -99,7 +99,7 @@ func TestBuildUserInfoFromClaims_MissingRealmAccess(t *testing.T) {
 		"email": "user@example.com",
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -116,7 +116,7 @@ func TestBuildUserInfoFromClaims_MissingResourceAccess(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -135,7 +135,7 @@ func TestBuildUserInfoFromClaims_SingleClientRole(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Len(t, userInfo.ClientRoles, 1)
@@ -149,7 +149,7 @@ func TestBuildUserInfoFromClaims_EmailVerifiedFalse(t *testing.T) {
 		"email_verified": false,
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "user@example.com", userInfo.Email)
@@ -163,7 +163,7 @@ func TestBuildUserInfoFromClaims_TypeCoercion(t *testing.T) {
 		"email_verified": "true", // String instead of bool
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -179,7 +179,7 @@ func TestBuildUserInfoFromClaims_NilRealmAccessRoles(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -192,7 +192,7 @@ func TestBuildUserInfoFromClaims_EmptyResourceAccess(t *testing.T) {
 		"resource_access": map[string]interface{}{},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.NotNil(t, userInfo.ClientRoles)
@@ -219,7 +219,7 @@ func TestBuildUserInfoFromClaims_MultipleRealmsAndClients(t *testing.T) {
 		},
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "1234567890", userInfo.Sub)
@@ -242,7 +242,7 @@ func TestBuildUserInfoFromClaims_SpecialCharactersInFields(t *testing.T) {
 		"preferred_username": "john.doe@example",
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "user-123-abc", userInfo.Sub)
@@ -259,7 +259,7 @@ func TestBuildUserInfoFromClaims_UnicodeCharacters(t *testing.T) {
 		"name":        "José Müller",
 	}
 
-	userInfo := buildUserInfoFromClaims(claims)
+	userInfo := buildUserInfoFromClaims(t.Context(), claims)
 
 	assert.NotNil(t, userInfo)
 	assert.Equal(t, "José", userInfo.GivenName)

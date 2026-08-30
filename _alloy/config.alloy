@@ -1,0 +1,103 @@
+// Local mirror of the cluster's Alloy: tails container stdout into Loki and
+// forwards OTLP spans to Tempo. Labels are relabelled to the same set the
+// cluster produces (namespace, pod, container, app, job) so the contract's
+// LogQL queries run verbatim here.
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+// In the cluster these come from the pod: app.kubernetes.io/name and the
+// namespace. Locally they come from the equivalent compose labels, so a
+// service only gets indexed once it declares them.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_app_kubernetes_io_name"]
+    target_label  = "app"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_namespace"]
+    target_label  = "namespace"
+  }
+
+  // Docker prefixes container names with a slash.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(.*)"
+    target_label  = "container"
+  }
+
+  // No pods locally; the container stands in, so `pod` is never empty.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/?(.*)"
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_app_kubernetes_io_name"]
+    target_label  = "job"
+  }
+
+  // Anything without an app label is infrastructure noise — drop it.
+  rule {
+    source_labels = ["app"]
+    regex         = ""
+    action        = "drop"
+  }
+}
+
+// Ships the line verbatim: no parsing stage, exactly as the cluster does.
+// `| json` happens at query time in Grafana.
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.containers.output
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// Applications export here, never to Tempo directly.
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
