@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/effiware/cloak-apps/utils"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	tracer = otel.Tracer("cloak-apps")
+	tracer = otel.Tracer(version.ServiceName)
 
 	// Metrics instruments (initialized via InitAdminMetrics after MeterProvider is set)
 	tokenRefreshCounter metric.Int64Counter
@@ -33,7 +33,7 @@ var (
 
 // InitAdminMetrics initializes metrics instruments. Must be called after MeterProvider is set.
 func InitAdminMetrics() {
-	meter := otel.Meter("cloak-apps")
+	meter := otel.Meter(version.ServiceName)
 	var err error
 
 	tokenRefreshCounter, err = meter.Int64Counter(
@@ -223,7 +223,7 @@ func (ac *AdminClient) getServiceAccountToken(ctx context.Context) error {
 	}
 
 	ac.setTokenAndExpiry(ctx, &tokenResp, time.Now().Add(time.Duration(tokenResp.ExpiresIn)*time.Second))
-	slog.Debug("Service account token obtained", "expires_in", strconv.Itoa(tokenResp.ExpiresIn/60)+"min")
+	slog.DebugContext(ctx, "Service account token obtained", "expires_in_s", tokenResp.ExpiresIn)
 	tokenRefreshCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "success")))
 
 	return nil
@@ -236,9 +236,9 @@ func (ac *AdminClient) ensureValidToken(ctx context.Context) error {
 	// Check if token is nil or expired (with safety buffer)
 	if token == nil || time.Now().Add(tokenExpiryBuffer).After(tokenExpiry) {
 		if token != nil {
-			slog.Debug("Token expired or expiring soon, proactively refreshing",
+			slog.DebugContext(ctx, "Token expiring soon, proactively refreshing",
 				"expires_at", tokenExpiry.Format(time.RFC3339),
-				"time_until_expiry", time.Until(tokenExpiry))
+				"time_until_expiry_ms", time.Until(tokenExpiry).Milliseconds())
 		}
 
 		// Use singleflight to ensure only one refresh happens

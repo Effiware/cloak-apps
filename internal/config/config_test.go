@@ -213,6 +213,7 @@ func TestValidate(t *testing.T) {
 // Helper function to create a valid baseline config for detailed validation tests
 func validBaselineConfig() *Config {
 	cfg := &Config{}
+	cfg.Server.Name = "cloak-apps"
 	cfg.Server.Port = 8080
 	cfg.Server.Timeout = 10
 	cfg.Server.RefreshIntervalMin = 5
@@ -222,7 +223,39 @@ func validBaselineConfig() *Config {
 	cfg.Session.MaxAge = 3600
 	cfg.Session.Store = "filesystem"
 	cfg.Session.IntrospectionCacheTTL = 15
+	cfg.Otlp.Protocol = "grpc"
 	return cfg
+}
+
+// Server.Name and Otlp.Protocol validation tests
+
+func TestValidate_ServerName_Empty(t *testing.T) {
+	cfg := validBaselineConfig()
+	cfg.Server.Name = ""
+	assert.Error(t, cfg.Validate())
+}
+
+func TestValidate_OtlpProtocol(t *testing.T) {
+	for _, tt := range []struct {
+		protocol string
+		wantErr  bool
+	}{
+		{"grpc", false},
+		{"http", false},
+		{"", true},
+		{"HTTP", true},
+		{"thrift", true},
+	} {
+		t.Run(tt.protocol, func(t *testing.T) {
+			cfg := validBaselineConfig()
+			cfg.Otlp.Protocol = tt.protocol
+			if tt.wantErr {
+				assert.Error(t, cfg.Validate())
+			} else {
+				assert.NoError(t, cfg.Validate())
+			}
+		})
+	}
 }
 
 // Server.RefreshIntervalMin validation tests

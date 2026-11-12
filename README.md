@@ -120,10 +120,73 @@ Detailed information is available in [KEYCLOAK_CONFIGURATION.md](./KEYCLOAK_CONF
 In `.env` file there are port overwrites with the default setup. You shouldn't need to change them but there is always
 a possibility to do so.
 
-Docker Compose includes Keycloak, Jaeger and Prometheus. Access them at `https://localhost`, `http://localhost:8083`
-and `http://localhost:8084` respectively
+Docker Compose includes Keycloak plus the full observability stack — Grafana, Loki, Tempo, Alloy and Prometheus:
+
+| Service | URL | Purpose |
+|---|---|---|
+| Keycloak | `https://localhost` | Auth and RBAC |
+| Grafana | `http://localhost:8083` | The only UI you need — logs, traces, metrics |
+| Prometheus | `http://localhost:8084` | Metric storage |
+| Loki | `http://localhost:8085` | Log storage (query via Grafana) |
+| Tempo | `http://localhost:8086` | Trace storage (query via Grafana) |
+| Alloy | `http://localhost:8087` | Collector — tails container logs, receives OTLP |
+
+Grafana runs with anonymous admin access locally and its datasources are provisioned from `_grafana/`, so there is
+nothing to click through
 
 Open your browser and navigate to `http://localhost:<app-port>` (default is 8080).
+
+---
+
+## Observability
+
+The app emits **JSON logs on stdout**, **OTLP traces** and **Prometheus metrics**, per the Auditee instrumentation
+contract. Alloy is the only collector: it tails container stdout into Loki and forwards spans to Tempo. Never point
+the app at Tempo directly.
+
+```
+CLOAKAPPS_OTLP_URL=alloy:4317      # alloy.ops.svc.cluster.local:4317 in the cluster
+CLOAKAPPS_OTLP_PROTOCOL=grpc       # or "http" against :4318
+OTEL_SERVICE_NAME=cloak-apps       # must equal the pod's app.kubernetes.io/name label
+```
+
+`OTEL_EXPORTER_OTLP_ENDPOINT` is honoured too and takes precedence — when it is set the exporter ignores
+`otlp.url`/`otlp.secure` entirely and the env URL's scheme decides TLS.
+
+### Log fields
+
+One compact JSON object per line. `trace_id` and `span_id` are added automatically from the context by a `slog`
+handler wrapper — but only for `…Context` calls, so **pass `ctx`**: `slog.InfoContext(ctx, …)`, never `slog.Info(…)`.
+
+| Field | Notes |
+|---|---|
+| `level`, `msg`, `time` | Always present. `msg` is constant — variables go in their own fields |
+| `service`, `env`, `instance` | Constant identity on every line |
+| `trace_id`, `span_id` | On every line emitted inside a request |
+| anything else | snake_case, stable types, flat. Never secrets, tokens or personal data |
+
+Users are identified by `user_sub` (the opaque Keycloak `sub`), never by username — logs leave the pod and are kept
+14 days.
+
+### Verifying the links
+
+In Grafana → Explore → Loki:
+
+```logql
+{namespace="dev-v1", app="cloak-apps"}                        // lines arriving at all?
+{namespace="dev-v1", app="cloak-apps"} | json | level="ERROR" // is the JSON parseable?
+{namespace="dev-v1"} | json | trace_id != ""                  // is the trace ID present?
+```
+
+Expand a line from the last query — it carries a **TraceID** link into Tempo, and the span's **Logs for this span**
+must come back to the same lines. Both directions, or it isn't working.
+
+If a direction comes back empty it is almost always one of three things: the key isn't spelled `trace_id`, the JSON
+isn't compact, or `OTEL_SERVICE_NAME` doesn't match `app.kubernetes.io/name` (Grafana maps the span's `service.name`
+onto the Loki `app` label).
+
+Locally, `LOG_NAMESPACE` in `.env` stands in for the K8s namespace and the compose labels
+(`app.kubernetes.io/name`, `namespace`) stand in for the pod labels, so the queries above run unchanged.
 
 ---
 
@@ -131,3 +194,4 @@ Open your browser and navigate to `http://localhost:<app-port>` (default is 8080
 
 - [CLAUDE.md](CLAUDE.md) - Project architecture and design decisions
 - [TODO.md](TODO.md) - Future implementation phases and roadmap
+- [OBSERVABILITY-PLAN.md](OBSERVABILITY-PLAN.md) - Alignment with the Auditee instrumentation contract

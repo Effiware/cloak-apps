@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/effiware/cloak-apps/internal/version"
 	"github.com/spf13/viper"
 )
 
@@ -19,6 +20,7 @@ type Config struct {
 	} `mapstructure:"keycloak"`
 
 	Server struct {
+		Name               string `mapstructure:"name"` // service.name in traces and the log `service` field
 		Port               int    `mapstructure:"port"`
 		Host               string `mapstructure:"host"`
 		Timeout            int    `mapstructure:"timeout"`
@@ -43,8 +45,9 @@ type Config struct {
 	} `mapstructure:"organization"`
 
 	Otlp struct {
-		Url    string `mapstructure:"url"`
-		Secure bool   `mapstructure:"secure"`
+		Url      string `mapstructure:"url"`
+		Protocol string `mapstructure:"protocol"` // "grpc" (default, :4317) or "http" (:4318)
+		Secure   bool   `mapstructure:"secure"`
 	} `mapstructure:"otlp"`
 
 	Metrics struct {
@@ -59,6 +62,7 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("./config")
 
+	viper.SetDefault("server.name", version.ServiceName)
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.timeout", 10)
 	viper.SetDefault("server.refresh_interval_min", 5)
@@ -70,6 +74,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("session.introspection_cache_ttl", 15)
 	viper.SetDefault("organization.name", "Effiware")
 	viper.SetDefault("organization.home_url", "https://effiware.com")
+	viper.SetDefault("otlp.protocol", "grpc")
 	viper.SetDefault("otlp.secure", true)
 	viper.SetDefault("metrics.enabled", false)
 
@@ -138,9 +143,22 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("session.introspection_cache_ttl must be positive")
 	}
 
+	if c.Server.Name == "" {
+		return fmt.Errorf("server.name is required")
+	}
+
+	validProtocols := []string{"grpc", "http"}
+	if !slices.Contains(validProtocols, c.Otlp.Protocol) {
+		return fmt.Errorf("otlp.protocol must be one of: %v, got '%s'", validProtocols, c.Otlp.Protocol)
+	}
+
 	return nil
 }
 
+// Sanitize strips the scheme from otlp.url: both exporters want host:port, and TLS
+// is decided by otlp.secure. OTEL_EXPORTER_OTLP_ENDPOINT is a full URL by spec and is
+// read by the SDK directly — it never passes through here, and when it is set the
+// exporter is built with no endpoint option at all.
 func (c *Config) Sanitize() error {
 	c.Otlp.Url = strings.TrimPrefix(c.Otlp.Url, "https://")
 	c.Otlp.Url = strings.TrimPrefix(c.Otlp.Url, "http://")

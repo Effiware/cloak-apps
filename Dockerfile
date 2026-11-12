@@ -27,7 +27,7 @@ RUN npm run build
 RUN sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${SERVER_VERSION}\"/" internal/docs/swagger.json
 RUN go build \
     -ldflags "-X github.com/effiware/cloak-apps/internal/version.Version=${SERVER_VERSION} -X github.com/effiware/cloak-apps/internal/version.BuildHash=${BUILD_HASH}" \
-    -o ./bin/main cmd/server/main.go
+    -o ./bin/main ./cmd/server
 
 FROM alpine:latest
 WORKDIR /app

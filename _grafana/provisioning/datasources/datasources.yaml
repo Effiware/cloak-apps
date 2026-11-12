@@ -1,0 +1,46 @@
+# These must match the cluster's datasources exactly — if they drift, verifying
+# the links locally proves nothing about production.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # The one hard-wired spelling in the contract. A log line links to its
+        # trace only if the key is literally trace_id and the JSON is compact.
+        - name: TraceID
+          matcherType: regex
+          matcherRegex: '"trace_id":"(\w+)"'
+          # $$ escapes provisioning's own env interpolation, which would eat a single $.
+          url: '$${__value.raw}'
+          urlDisplayLabel: 'View trace'
+          datasourceUid: tempo
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # "Logs for this span": maps the span's service.name onto the Loki `app`
+      # label. If OTEL_SERVICE_NAME and app.kubernetes.io/name differ, this
+      # returns nothing while everything else still looks healthy.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        filterByTraceID: true
+        tags:
+          - key: 'service.name'
+            value: 'app'
+
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true

@@ -27,17 +27,17 @@ func RenderIndex(orgService *services.OrganizationService) ViewHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		userInfo, ok := middlewares.GetUserFromContext(r.Context())
 		if !ok {
-			slog.Error("Failed to get user from context")
+			slog.ErrorContext(r.Context(), "Failed to get user from context")
 			return &UnauthorizedError{Message: "User not authenticated"}
 		}
 
 		organization, err := orgService.GetOrganization()
 		if err != nil {
-			slog.Error("Failed to load organization,", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to load organization", "error", err)
 			return err
 		}
 
-		slog.Debug("Rendering index for", "user", userInfo.PreferredUsername)
+		slog.DebugContext(r.Context(), "Rendering index", "user_sub", userInfo.Sub)
 
 		template := views.Index(userInfo, organization)
 		return template.Render(r.Context(), w)
@@ -50,7 +50,7 @@ func RenderApplications(appService *services.ApplicationService) ViewHandlerT {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		userInfo, ok := middlewares.GetUserFromContext(r.Context())
 		if !ok {
-			slog.Error("Failed to get user from context")
+			slog.ErrorContext(r.Context(), "Failed to get user from context")
 			return &UnauthorizedError{Message: "User not authenticated"}
 		}
 
@@ -63,7 +63,7 @@ func RenderApplications(appService *services.ApplicationService) ViewHandlerT {
 		// Fetch applications from Keycloak
 		applications, err := appService.GetApplicationsForUser(r.Context(), userInfo)
 		if err != nil {
-			slog.Error("Failed to get applications,", "error", err)
+			slog.ErrorContext(r.Context(), "Failed to get applications", "error", err)
 			// Return error panel instead of error - this is HDA, we return HTML
 			retryURL := "/hda/applications?view=" + view
 			template := components.ErrorPanel("The authorization server may be temporarily unavailable.", retryURL)
@@ -82,7 +82,8 @@ func RenderApplications(appService *services.ApplicationService) ViewHandlerT {
 		// Filter applications by environment (strict match)
 		filteredApps := filterByEnvironment(applications, env)
 
-		slog.Debug("Rendering applications for", "user", userInfo.PreferredUsername, "env", env, "view", view, "count", len(filteredApps), "availableEnvs", environments)
+		slog.DebugContext(r.Context(), "Rendering applications", "user_sub", userInfo.Sub,
+			"env", env, "view", view, "count", len(filteredApps), "available_envs", environments)
 
 		template := components.ApplicationsGrid(filteredApps, environments, env, view)
 		return template.Render(r.Context(), w)
